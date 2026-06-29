@@ -1,0 +1,107 @@
+esphome:
+  name: epaper-display
+  friendly_name: ePaper Display
+  on_boot:
+    priority: -100
+    then:
+      - delay: 20s
+      - component.update: eink_display
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_EINK
+
+ota:
+  - platform: esphome
+    password: !secret ota_pw_EINK
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Epaper-Display Fallback Hotspot"
+    password: !secret fb_pw_EINK
+
+captive_portal:
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+text_sensor:
+  - platform: homeassistant
+    id: bedroom_temperature
+    entity_id: sensor.aqara_temp_bedroom_temperature
+    internal: true
+    on_value:
+      then:
+        - logger.log:
+            format: "Bedroom temperature from HA: '%s'"
+            args:
+              - x.c_str()
+        - component.update: eink_display
+
+font:
+  - file: "fonts/Arimo-Regular.ttf"
+    id: arimo36
+    size: 36
+    glyphs:
+      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "fonts/Arimo-Regular.ttf"
+    id: arimo30
+    size: 30
+    glyphs:
+      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "fonts/Arimo-Regular.ttf"
+    id: arimo14
+    size: 14
+    glyphs:
+      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "fonts/Arimo-Regular.ttf"
+    id: arimo12
+    size: 12
+    glyphs:
+      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+display:
+  - platform: epaper_spi
+    id: eink_display
+    model: WeAct-4.2in-3c
+    cs_pin: GPIO5
+    dc_pin: GPIO17
+    reset_pin: GPIO16
+    reset_duration: 50ms
+    busy_pin: GPIO4
+    rotation: 90°
+    update_interval: 15min
+    lambda: |-
+      const auto white = Color(255, 255, 255);
+      const auto black = Color(0, 0, 0);
+      const auto red = Color(255, 0, 0);
+      const int center_x = it.get_width() / 2;
+      const int center_y = it.get_height() / 2;
+      std::string temperature = "--.-";
+
+      it.fill(white);
+      if (id(bedroom_temperature).has_state()) {
+        const std::string raw = id(bedroom_temperature).state;
+        if (!raw.empty() && raw != "unknown" && raw != "unavailable" && raw != "none") {
+          char buf[16];
+          const float temp = std::atof(raw.c_str());
+          snprintf(buf, sizeof(buf), "%.1f", temp);
+          temperature = buf;
+        }
+      }
+      it.print(center_x - 4, center_y + 8, id(arimo36), red, TextAlign::CENTER_RIGHT, temperature.c_str());
+      it.print(center_x + 4, center_y + 6, id(arimo30), black, TextAlign::CENTER_LEFT, "°C");

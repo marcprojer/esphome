@@ -1,0 +1,74 @@
+esphome:
+  name: esp32cam
+
+esp32:
+  board: esp32cam
+  framework:
+    type: arduino   # Arduino meist performanter mit esp32_camera
+
+# PSRAM aktivieren (wichtig für höhere Auflösungen)
+psram:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_CAM
+
+ota:
+  - platform: esphome
+    password: !secret ota_pw_CAM
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none  # Deaktiviert Wi‑Fi Powersave → höhere Durchsatzrate
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32Cam Fallback Hotspot"
+    password: !secret fb_pw_CAM
+
+captive_portal:
+
+# Webserver (für einfache Ansicht der Seite)
+web_server:
+  port: 80
+
+# Kamera-Konfiguration für AI-Thinker (OV2640)
+esp32_camera:
+  name: "ESP32-CAM"
+  id: cam1
+  external_clock:
+    pin: GPIO0
+    frequency: 20MHz
+  i2c_pins:
+    sda: GPIO26
+    scl: GPIO27
+  data_pins: [GPIO5, GPIO18, GPIO19, GPIO21, GPIO36, GPIO39, GPIO34, GPIO35]
+  vsync_pin: GPIO25
+  href_pin: GPIO23
+  pixel_clock_pin: GPIO22
+  power_down_pin: GPIO32
+
+  # Bildqualität / Auflösung
+  resolution: 1600x1200 # PSRAM aktiv → hohe Auflösung (UXGA)
+  jpeg_quality: 12      # hohe Qualität, moderater Durchsatz
+  max_framerate: 12 fps # stabil bei hoher Auflösung
+
+  # Bildmanipulation
+  vertical_flip: false
+  horizontal_mirror: false
+
+# Blitz-/LED-Ausgang (bei AI-Thinker üblicherweise GPIO4, kann abweichen)
+output:
+  - platform: gpio
+    pin: GPIO4
+    id: flash_led
+
+switch:
+  - platform: output
+    name: "ESP32-CAM Blitz"
+    output: flash_led

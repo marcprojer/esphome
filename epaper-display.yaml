@@ -44,6 +44,7 @@ captive_portal:
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
+
 time:
   - platform: homeassistant
     id: ha_time
@@ -67,11 +68,45 @@ font:
 
   - file: "gfonts://Roboto"
     id: font_xl
-    size: 42
+    size: 46
 
   - file: "gfonts://Roboto"
     id: font_title
-    size: 24
+    size: 25
+
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: mdi_large
+    size: 58
+    glyphs:
+      - "\U000F0599" # weather-sunny
+      - "\U000F0595" # weather-partly-cloudy
+      - "\U000F0590" # weather-cloudy
+      - "\U000F0597" # weather-rainy
+      - "\U000F0596" # weather-pouring
+      - "\U000F0593" # weather-lightning
+      - "\U000F067E" # weather-lightning-rainy
+      - "\U000F0598" # weather-snowy
+      - "\U000F067F" # weather-snowy-rainy
+      - "\U000F0591" # weather-fog
+      - "\U000F059D" # weather-windy
+
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: mdi_medium
+    size: 34
+    glyphs:
+      - "\U000F0599" # weather-sunny
+      - "\U000F0595" # weather-partly-cloudy
+      - "\U000F0590" # weather-cloudy
+      - "\U000F0597" # weather-rainy
+      - "\U000F0596" # weather-pouring
+      - "\U000F0593" # weather-lightning
+      - "\U000F067E" # weather-lightning-rainy
+      - "\U000F0598" # weather-snowy
+      - "\U000F067F" # weather-snowy-rainy
+      - "\U000F0591" # weather-fog
+      - "\U000F059D" # weather-windy
+      - "\U000F029A" # gauge
+      - "\U000F058E" # water-percent
 
 text_sensor:
   - platform: homeassistant
@@ -211,6 +246,10 @@ display:
     busy_pin: GPIO4
     update_interval: 30min
     lambda: |-
+      // Bei deinem Display ist COLOR_ON offenbar hell/weiss und COLOR_OFF dunkel/schwarz.
+      const Color BG = COLOR_ON;
+      const Color FG = COLOR_OFF;
+
       auto valid = [](float v) -> bool {
         return !isnan(v);
       };
@@ -240,6 +279,7 @@ display:
         if (d == "Fri") return "Fr";
         if (d == "Sat") return "Sa";
         if (d == "Sun") return "So";
+        if (d == "Mo" || d == "Di" || d == "Mi" || d == "Do" || d == "Fr" || d == "Sa" || d == "So") return d.c_str();
         return "--";
       };
 
@@ -255,154 +295,97 @@ display:
         return "NW";
       };
 
-      auto draw_sun = [&](int cx, int cy, int r) {
-        it.circle(cx, cy, r);
-        for (int i = 0; i < 8; i++) {
-          float a = i * 0.785398;
-          int x1 = cx + cos(a) * (r + 5);
-          int y1 = cy + sin(a) * (r + 5);
-          int x2 = cx + cos(a) * (r + 12);
-          int y2 = cy + sin(a) * (r + 12);
-          it.line(x1, y1, x2, y2);
-        }
+      auto weather_glyph = [](const std::string &c) -> const char* {
+        if (c == "sunny" || c == "clear-night") return "\U000F0599";
+        if (c == "partlycloudy") return "\U000F0595";
+        if (c == "cloudy") return "\U000F0590";
+        if (c == "rainy") return "\U000F0597";
+        if (c == "pouring") return "\U000F0596";
+        if (c == "lightning") return "\U000F0593";
+        if (c == "lightning-rainy") return "\U000F067E";
+        if (c == "snowy") return "\U000F0598";
+        if (c == "snowy-rainy") return "\U000F067F";
+        if (c == "fog") return "\U000F0591";
+        if (c == "windy" || c == "windy-variant") return "\U000F059D";
+        return "\U000F0590";
       };
 
-      auto draw_cloud = [&](int x, int y) {
-        it.circle(x + 13, y + 17, 11);
-        it.circle(x + 27, y + 12, 14);
-        it.circle(x + 42, y + 17, 11);
-        it.line(x + 5, y + 27, x + 51, y + 27);
-        it.line(x + 5, y + 27, x + 5, y + 18);
-        it.line(x + 51, y + 27, x + 51, y + 18);
-      };
+      // Screen
+      it.fill(BG);
 
-      auto draw_partly = [&](int x, int y) {
-        draw_sun(x + 43, y + 16, 10);
-        draw_cloud(x, y + 6);
-      };
+      // Aussenrahmen bewusst weggelassen:
+      // Das Display hat bereits einen physischen Rand.
+      // Dadurch bleibt mehr nutzbare Fläche.
 
-      auto draw_lightning = [&](int x, int y) {
-        draw_cloud(x, y);
-        it.line(x + 28, y + 29, x + 21, y + 43);
-        it.line(x + 21, y + 43, x + 31, y + 40);
-        it.line(x + 31, y + 40, x + 24, y + 54);
-      };
-
-      auto draw_rain = [&](int x, int y) {
-        draw_cloud(x, y);
-        it.line(x + 18, y + 35, x + 13, y + 45);
-        it.line(x + 34, y + 35, x + 29, y + 45);
-      };
-
-      auto draw_weather_icon = [&](int x, int y, const std::string &c) {
-        if (c == "sunny" || c == "clear-night") {
-          draw_sun(x + 27, y + 26, 12);
-        } else if (c == "partlycloudy") {
-          draw_partly(x, y);
-        } else if (c == "lightning" || c == "lightning-rainy") {
-          draw_lightning(x, y);
-        } else if (c == "rainy" || c == "pouring") {
-          draw_rain(x, y);
-        } else {
-          draw_cloud(x, y);
-        }
-      };
-
-      auto draw_pressure_icon = [&](int x, int y) {
-        it.circle(x, y, 9);
-        it.line(x, y, x + 5, y - 5);
-        it.line(x, y, x + 2, y - 8);
-        it.circle(x, y, 2);
-      };
-
-      auto draw_humidity_icon = [&](int x, int y) {
-        it.line(x, y - 12, x - 8, y + 3);
-        it.line(x, y - 12, x + 8, y + 3);
-        it.circle(x, y + 4, 8);
-      };
-
-      auto draw_wind_icon = [&](int x, int y) {
-        it.line(x - 12, y - 8, x + 13, y - 8);
-        it.line(x - 12, y, x + 18, y);
-        it.line(x - 12, y + 8, x + 8, y + 8);
-      };
-
-      // Hintergrund
-      it.fill(COLOR_OFF);
-
-      // Rahmen
-      it.rectangle(0, 0, 400, 300);
-
-      // Titel
-      it.printf(16, 8, id(font_title), "Tramdepot Hard");
-
-      // Hauptbereich
       std::string current_condition = id(weather_condition).has_state()
         ? id(weather_condition).state
         : "";
 
-      draw_weather_icon(18, 40, current_condition);
+      // ---------- Header ----------
+      it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
 
-      it.printf(90, 43, id(font_l), "%s", condition_de(current_condition));
-      it.printf(92, 76, id(font_s), "MeteoSwiss");
+      // Main icon
+      it.printf(28, 50, id(mdi_large), FG, "%s", weather_glyph(current_condition));
 
+      // Condition
+      it.printf(108, 48, id(font_l), FG, "%s", condition_de(current_condition));
+      it.printf(110, 82, id(font_s), FG, "MeteoSwiss");
+
+      // Temperature right
       if (valid(id(weather_temperature).state)) {
-        it.printf(382, 42, id(font_xl), TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+        it.printf(386, 42, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
       } else {
-        it.printf(382, 42, id(font_xl), TextAlign::TOP_RIGHT, "--.- °C");
+        it.printf(386, 42, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
         it.printf(
-          382, 84, id(font_m), TextAlign::TOP_RIGHT,
+          386, 88, id(font_m), FG, TextAlign::TOP_RIGHT,
           "%.0f °C / %.0f °C",
           id(fc_high_0).state,
           id(fc_low_0).state
         );
       }
 
-      it.line(10, 108, 390, 108);
+      it.line(10, 116, 390, 116, FG);
 
-      // Details: Luftdruck
-      draw_pressure_icon(28, 128);
-      it.printf(52, 119, id(font_s), "Luftdruck");
+      // ---------- Detail rows ----------
+      // Row height 32 px
+      it.printf(18, 123, id(mdi_medium), FG, "\U000F029A");
+      it.printf(58, 126, id(font_s), FG, "Luftdruck");
       if (valid(id(weather_pressure).state)) {
-        it.printf(380, 119, id(font_s), TextAlign::TOP_RIGHT, "%.1f hPa", id(weather_pressure).state);
+        it.printf(382, 126, id(font_s), FG, TextAlign::TOP_RIGHT, "%.1f hPa", id(weather_pressure).state);
       } else {
-        it.printf(380, 119, id(font_s), TextAlign::TOP_RIGHT, "- hPa");
+        it.printf(382, 126, id(font_s), FG, TextAlign::TOP_RIGHT, "- hPa");
       }
+      it.line(10, 151, 390, 151, FG);
 
-      it.line(10, 145, 390, 145);
-
-      // Details: Luftfeuchtigkeit
-      draw_humidity_icon(28, 164);
-      it.printf(52, 155, id(font_s), "Luftfeuchtigkeit");
+      it.printf(18, 156, id(mdi_medium), FG, "\U000F058E");
+      it.printf(58, 159, id(font_s), FG, "Luftfeuchtigkeit");
       if (valid(id(weather_humidity).state)) {
-        it.printf(380, 155, id(font_s), TextAlign::TOP_RIGHT, "%.0f %%", id(weather_humidity).state);
+        it.printf(382, 159, id(font_s), FG, TextAlign::TOP_RIGHT, "%.0f %%", id(weather_humidity).state);
       } else {
-        it.printf(380, 155, id(font_s), TextAlign::TOP_RIGHT, "- %%");
+        it.printf(382, 159, id(font_s), FG, TextAlign::TOP_RIGHT, "- %%");
       }
+      it.line(10, 184, 390, 184, FG);
 
-      it.line(10, 181, 390, 181);
-
-      // Details: Wind
-      draw_wind_icon(28, 199);
-      it.printf(52, 190, id(font_s), "Windgeschwindigkeit");
+      it.printf(18, 189, id(mdi_medium), FG, "\U000F059D");
+      it.printf(58, 192, id(font_s), FG, "Wind");
       if (valid(id(weather_wind_speed).state)) {
         it.printf(
-          380, 190, id(font_s), TextAlign::TOP_RIGHT,
+          382, 192, id(font_s), FG, TextAlign::TOP_RIGHT,
           "%.1f km/h (%s)",
           id(weather_wind_speed).state,
           bearing_to_text(id(weather_wind_bearing).state)
         );
       } else {
-        it.printf(380, 190, id(font_s), TextAlign::TOP_RIGHT, "- km/h");
+        it.printf(382, 192, id(font_s), FG, TextAlign::TOP_RIGHT, "- km/h");
       }
+      it.line(10, 217, 390, 217, FG);
 
-      it.line(10, 216, 390, 216);
-
-      // Vorhersage
-      it.printf(16, 220, id(font_m), "Vorhersage:");
+      // ---------- Forecast ----------
+      // Mehr Platz als vorher: 5 Spalten, kleinere Icons, Text nicht unter Icons gequetscht.
+      it.printf(12, 220, id(font_m), FG, "Vorhersage:");
 
       const int xs[5] = {40, 120, 200, 280, 360};
 
@@ -441,18 +424,18 @@ display:
       for (int i = 0; i < 5; i++) {
         int x = xs[i];
 
-        it.printf(x, 240, id(font_s), TextAlign::TOP_CENTER, "%s", day_de(days[i]));
+        // Wochentag
+        it.printf(x, 242, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
 
-        draw_weather_icon(x - 27, 257, conds[i]);
+        // Icon als Glyph
+        it.printf(x, 258, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
 
-        if (valid(highs[i])) {
-          it.printf(x, 284, id(font_s), TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+        // Temperaturen unten: High / Low nebeneinander
+        if (valid(highs[i]) && valid(lows[i])) {
+          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+        } else if (valid(highs[i])) {
+          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
         } else {
-          it.printf(x, 284, id(font_s), TextAlign::TOP_CENTER, "--°");
-        }
-
-        // Low-Temperatur sehr klein unten; falls zu knapp, diesen Block entfernen.
-        if (valid(lows[i])) {
-          it.printf(x + 27, 284, id(font_xs), TextAlign::TOP_CENTER, "%.0f°", lows[i]);
+          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
       }

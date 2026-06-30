@@ -4,7 +4,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - delay: 20s
+      - delay: 60s
       - component.update: eink_display
 
 esp32:
@@ -19,6 +19,12 @@ logger:
 api:
   encryption:
     key: !secret api_key_EINK
+
+  on_client_connected:
+    then:
+      - logger.log: "Home Assistant API connected, waiting for states..."
+      - delay: 60s
+      - component.update: eink_display
 
 ota:
   - platform: esphome

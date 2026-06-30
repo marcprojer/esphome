@@ -38,41 +38,161 @@ captive_portal:
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
+time:
+  - platform: homeassistant
+    id: ha_time
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_xs
+    size: 11
+
+  - file: "gfonts://Roboto"
+    id: font_s
+    size: 15
+
+  - file: "gfonts://Roboto"
+    id: font_m
+    size: 19
+
+  - file: "gfonts://Roboto"
+    id: font_l
+    size: 30
+
+  - file: "gfonts://Roboto"
+    id: font_xl
+    size: 42
+
+  - file: "gfonts://Roboto"
+    id: font_title
+    size: 24
 
 text_sensor:
   - platform: homeassistant
-    id: bedroom_temperature
-    entity_id: sensor.aqara_temp_bedroom_temperature
+    id: weather_condition
+    entity_id: weather.20_hardturmstrasse_escher_wyss
     internal: true
-    on_value:
-      then:
-        - logger.log:
-            format: "Bedroom temperature from HA: '%s'"
-            args:
-              - x.c_str()
-        - component.update: eink_display
 
-font:
-  - file: "fonts/Arimo-Regular.ttf"
-    id: arimo36
-    size: 36
-    glyphs:
-      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  - file: "fonts/Arimo-Regular.ttf"
-    id: arimo30
-    size: 30
-    glyphs:
-      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  - file: "fonts/Arimo-Regular.ttf"
-    id: arimo14
-    size: 14
-    glyphs:
-      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  - file: "fonts/Arimo-Regular.ttf"
-    id: arimo12
-    size: 12
-    glyphs:
-      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - platform: homeassistant
+    id: fc_day_0
+    entity_id: sensor.epaper_forecast_day_0
+    internal: true
+  - platform: homeassistant
+    id: fc_day_1
+    entity_id: sensor.epaper_forecast_day_1
+    internal: true
+  - platform: homeassistant
+    id: fc_day_2
+    entity_id: sensor.epaper_forecast_day_2
+    internal: true
+  - platform: homeassistant
+    id: fc_day_3
+    entity_id: sensor.epaper_forecast_day_3
+    internal: true
+  - platform: homeassistant
+    id: fc_day_4
+    entity_id: sensor.epaper_forecast_day_4
+    internal: true
+
+  - platform: homeassistant
+    id: fc_cond_0
+    entity_id: sensor.epaper_forecast_condition_0
+    internal: true
+  - platform: homeassistant
+    id: fc_cond_1
+    entity_id: sensor.epaper_forecast_condition_1
+    internal: true
+  - platform: homeassistant
+    id: fc_cond_2
+    entity_id: sensor.epaper_forecast_condition_2
+    internal: true
+  - platform: homeassistant
+    id: fc_cond_3
+    entity_id: sensor.epaper_forecast_condition_3
+    internal: true
+  - platform: homeassistant
+    id: fc_cond_4
+    entity_id: sensor.epaper_forecast_condition_4
+    internal: true
+
+sensor:
+  - platform: homeassistant
+    id: weather_temperature
+    entity_id: weather.20_hardturmstrasse_escher_wyss
+    attribute: temperature
+    internal: true
+
+  - platform: homeassistant
+    id: weather_pressure
+    entity_id: weather.20_hardturmstrasse_escher_wyss
+    attribute: pressure
+    internal: true
+
+  - platform: homeassistant
+    id: weather_humidity
+    entity_id: weather.20_hardturmstrasse_escher_wyss
+    attribute: humidity
+    internal: true
+
+  - platform: homeassistant
+    id: weather_wind_speed
+    entity_id: weather.20_hardturmstrasse_escher_wyss
+    attribute: wind_speed
+    internal: true
+
+  - platform: homeassistant
+    id: weather_wind_bearing
+    entity_id: weather.20_hardturmstrasse_escher_wyss
+    attribute: wind_bearing
+    internal: true
+
+  - platform: homeassistant
+    id: fc_high_0
+    entity_id: sensor.epaper_forecast_high_0
+    internal: true
+  - platform: homeassistant
+    id: fc_high_1
+    entity_id: sensor.epaper_forecast_high_1
+    internal: true
+  - platform: homeassistant
+    id: fc_high_2
+    entity_id: sensor.epaper_forecast_high_2
+    internal: true
+  - platform: homeassistant
+    id: fc_high_3
+    entity_id: sensor.epaper_forecast_high_3
+    internal: true
+  - platform: homeassistant
+    id: fc_high_4
+    entity_id: sensor.epaper_forecast_high_4
+    internal: true
+
+  - platform: homeassistant
+    id: fc_low_0
+    entity_id: sensor.epaper_forecast_low_0
+    internal: true
+  - platform: homeassistant
+    id: fc_low_1
+    entity_id: sensor.epaper_forecast_low_1
+    internal: true
+  - platform: homeassistant
+    id: fc_low_2
+    entity_id: sensor.epaper_forecast_low_2
+    internal: true
+  - platform: homeassistant
+    id: fc_low_3
+    entity_id: sensor.epaper_forecast_low_3
+    internal: true
+  - platform: homeassistant
+    id: fc_low_4
+    entity_id: sensor.epaper_forecast_low_4
+    internal: true
+
+button:
+  - platform: template
+    name: "ePaper Display aktualisieren"
+    on_press:
+      - component.update: eink_display
 
 display:
   - platform: epaper_spi
@@ -83,25 +203,250 @@ display:
     reset_pin: GPIO16
     reset_duration: 50ms
     busy_pin: GPIO4
-    rotation: 90°
-    update_interval: 15min
+    update_interval: 30min
     lambda: |-
-      const auto white = Color(255, 255, 255);
-      const auto black = Color(0, 0, 0);
-      const auto red = Color(255, 0, 0);
-      const int center_x = it.get_width() / 2;
-      const int center_y = it.get_height() / 2;
-      std::string temperature = "--.-";
+      auto valid = [](float v) -> bool {
+        return !isnan(v);
+      };
 
-      it.fill(white);
-      if (id(bedroom_temperature).has_state()) {
-        const std::string raw = id(bedroom_temperature).state;
-        if (!raw.empty() && raw != "unknown" && raw != "unavailable" && raw != "none") {
-          char buf[16];
-          const float temp = std::atof(raw.c_str());
-          snprintf(buf, sizeof(buf), "%.1f", temp);
-          temperature = buf;
+      auto condition_de = [](const std::string &c) -> const char* {
+        if (c == "sunny") return "Sonnig";
+        if (c == "clear-night") return "Klar";
+        if (c == "partlycloudy") return "Teilw. bew.";
+        if (c == "cloudy") return "Bewölkt";
+        if (c == "rainy") return "Regen";
+        if (c == "pouring") return "Starkregen";
+        if (c == "lightning") return "Gewitter";
+        if (c == "lightning-rainy") return "Gewitter";
+        if (c == "snowy") return "Schnee";
+        if (c == "snowy-rainy") return "Schneeregen";
+        if (c == "fog") return "Nebel";
+        if (c == "windy") return "Windig";
+        if (c == "windy-variant") return "Windig";
+        return "Wetter";
+      };
+
+      auto day_de = [](const std::string &d) -> const char* {
+        if (d == "Mon") return "Mo";
+        if (d == "Tue") return "Di";
+        if (d == "Wed") return "Mi";
+        if (d == "Thu") return "Do";
+        if (d == "Fri") return "Fr";
+        if (d == "Sat") return "Sa";
+        if (d == "Sun") return "So";
+        return "--";
+      };
+
+      auto bearing_to_text = [](float deg) -> const char* {
+        if (isnan(deg)) return "-";
+        if (deg >= 337.5 || deg < 22.5) return "N";
+        if (deg < 67.5) return "NO";
+        if (deg < 112.5) return "O";
+        if (deg < 157.5) return "SO";
+        if (deg < 202.5) return "S";
+        if (deg < 247.5) return "SW";
+        if (deg < 292.5) return "W";
+        return "NW";
+      };
+
+      auto draw_sun = [&](int cx, int cy, int r) {
+        it.circle(cx, cy, r);
+        for (int i = 0; i < 8; i++) {
+          float a = i * 0.785398;
+          int x1 = cx + cos(a) * (r + 5);
+          int y1 = cy + sin(a) * (r + 5);
+          int x2 = cx + cos(a) * (r + 12);
+          int y2 = cy + sin(a) * (r + 12);
+          it.line(x1, y1, x2, y2);
+        }
+      };
+
+      auto draw_cloud = [&](int x, int y) {
+        it.circle(x + 13, y + 17, 11);
+        it.circle(x + 27, y + 12, 14);
+        it.circle(x + 42, y + 17, 11);
+        it.line(x + 5, y + 27, x + 51, y + 27);
+        it.line(x + 5, y + 27, x + 5, y + 18);
+        it.line(x + 51, y + 27, x + 51, y + 18);
+      };
+
+      auto draw_partly = [&](int x, int y) {
+        draw_sun(x + 43, y + 16, 10);
+        draw_cloud(x, y + 6);
+      };
+
+      auto draw_lightning = [&](int x, int y) {
+        draw_cloud(x, y);
+        it.line(x + 28, y + 29, x + 21, y + 43);
+        it.line(x + 21, y + 43, x + 31, y + 40);
+        it.line(x + 31, y + 40, x + 24, y + 54);
+      };
+
+      auto draw_rain = [&](int x, int y) {
+        draw_cloud(x, y);
+        it.line(x + 18, y + 35, x + 13, y + 45);
+        it.line(x + 34, y + 35, x + 29, y + 45);
+      };
+
+      auto draw_weather_icon = [&](int x, int y, const std::string &c) {
+        if (c == "sunny" || c == "clear-night") {
+          draw_sun(x + 27, y + 26, 12);
+        } else if (c == "partlycloudy") {
+          draw_partly(x, y);
+        } else if (c == "lightning" || c == "lightning-rainy") {
+          draw_lightning(x, y);
+        } else if (c == "rainy" || c == "pouring") {
+          draw_rain(x, y);
+        } else {
+          draw_cloud(x, y);
+        }
+      };
+
+      auto draw_pressure_icon = [&](int x, int y) {
+        it.circle(x, y, 9);
+        it.line(x, y, x + 5, y - 5);
+        it.line(x, y, x + 2, y - 8);
+        it.circle(x, y, 2);
+      };
+
+      auto draw_humidity_icon = [&](int x, int y) {
+        it.line(x, y - 12, x - 8, y + 3);
+        it.line(x, y - 12, x + 8, y + 3);
+        it.circle(x, y + 4, 8);
+      };
+
+      auto draw_wind_icon = [&](int x, int y) {
+        it.line(x - 12, y - 8, x + 13, y - 8);
+        it.line(x - 12, y, x + 18, y);
+        it.line(x - 12, y + 8, x + 8, y + 8);
+      };
+
+      // Hintergrund
+      it.fill(COLOR_OFF);
+
+      // Rahmen
+      it.rectangle(0, 0, 400, 300);
+
+      // Titel
+      it.printf(16, 8, id(font_title), "Tramdepot Hard");
+
+      // Hauptbereich
+      std::string current_condition = id(weather_condition).has_state()
+        ? id(weather_condition).state
+        : "";
+
+      draw_weather_icon(18, 40, current_condition);
+
+      it.printf(90, 43, id(font_l), "%s", condition_de(current_condition));
+      it.printf(92, 76, id(font_s), "MeteoSwiss");
+
+      if (valid(id(weather_temperature).state)) {
+        it.printf(382, 42, id(font_xl), TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+      } else {
+        it.printf(382, 42, id(font_xl), TextAlign::TOP_RIGHT, "--.- °C");
+      }
+
+      if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
+        it.printf(
+          382, 84, id(font_m), TextAlign::TOP_RIGHT,
+          "%.0f °C / %.0f °C",
+          id(fc_high_0).state,
+          id(fc_low_0).state
+        );
+      }
+
+      it.line(10, 108, 390, 108);
+
+      // Details: Luftdruck
+      draw_pressure_icon(28, 128);
+      it.printf(52, 119, id(font_s), "Luftdruck");
+      if (valid(id(weather_pressure).state)) {
+        it.printf(380, 119, id(font_s), TextAlign::TOP_RIGHT, "%.1f hPa", id(weather_pressure).state);
+      } else {
+        it.printf(380, 119, id(font_s), TextAlign::TOP_RIGHT, "- hPa");
+      }
+
+      it.line(10, 145, 390, 145);
+
+      // Details: Luftfeuchtigkeit
+      draw_humidity_icon(28, 164);
+      it.printf(52, 155, id(font_s), "Luftfeuchtigkeit");
+      if (valid(id(weather_humidity).state)) {
+        it.printf(380, 155, id(font_s), TextAlign::TOP_RIGHT, "%.0f %%", id(weather_humidity).state);
+      } else {
+        it.printf(380, 155, id(font_s), TextAlign::TOP_RIGHT, "- %%");
+      }
+
+      it.line(10, 181, 390, 181);
+
+      // Details: Wind
+      draw_wind_icon(28, 199);
+      it.printf(52, 190, id(font_s), "Windgeschwindigkeit");
+      if (valid(id(weather_wind_speed).state)) {
+        it.printf(
+          380, 190, id(font_s), TextAlign::TOP_RIGHT,
+          "%.1f km/h (%s)",
+          id(weather_wind_speed).state,
+          bearing_to_text(id(weather_wind_bearing).state)
+        );
+      } else {
+        it.printf(380, 190, id(font_s), TextAlign::TOP_RIGHT, "- km/h");
+      }
+
+      it.line(10, 216, 390, 216);
+
+      // Vorhersage
+      it.printf(16, 220, id(font_m), "Vorhersage:");
+
+      const int xs[5] = {40, 120, 200, 280, 360};
+
+      std::string days[5] = {
+        id(fc_day_0).has_state() ? id(fc_day_0).state : "",
+        id(fc_day_1).has_state() ? id(fc_day_1).state : "",
+        id(fc_day_2).has_state() ? id(fc_day_2).state : "",
+        id(fc_day_3).has_state() ? id(fc_day_3).state : "",
+        id(fc_day_4).has_state() ? id(fc_day_4).state : ""
+      };
+
+      std::string conds[5] = {
+        id(fc_cond_0).has_state() ? id(fc_cond_0).state : "",
+        id(fc_cond_1).has_state() ? id(fc_cond_1).state : "",
+        id(fc_cond_2).has_state() ? id(fc_cond_2).state : "",
+        id(fc_cond_3).has_state() ? id(fc_cond_3).state : "",
+        id(fc_cond_4).has_state() ? id(fc_cond_4).state : ""
+      };
+
+      float highs[5] = {
+        id(fc_high_0).state,
+        id(fc_high_1).state,
+        id(fc_high_2).state,
+        id(fc_high_3).state,
+        id(fc_high_4).state
+      };
+
+      float lows[5] = {
+        id(fc_low_0).state,
+        id(fc_low_1).state,
+        id(fc_low_2).state,
+        id(fc_low_3).state,
+        id(fc_low_4).state
+      };
+
+      for (int i = 0; i < 5; i++) {
+        int x = xs[i];
+
+        it.printf(x, 240, id(font_s), TextAlign::TOP_CENTER, "%s", day_de(days[i]));
+
+        draw_weather_icon(x - 27, 257, conds[i]);
+
+        if (valid(highs[i])) {
+          it.printf(x, 284, id(font_s), TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+        } else {
+          it.printf(x, 284, id(font_s), TextAlign::TOP_CENTER, "--°");
+        }
+
+        // Low-Temperatur sehr klein unten; falls zu knapp, diesen Block entfernen.
+        if (valid(lows[i])) {
+          it.printf(x + 27, 284, id(font_xs), TextAlign::TOP_CENTER, "%.0f°", lows[i]);
         }
       }
-      it.print(center_x - 4, center_y + 8, id(arimo36), red, TextAlign::CENTER_RIGHT, temperature.c_str());
-      it.print(center_x + 4, center_y + 6, id(arimo30), black, TextAlign::CENTER_LEFT, "°C");

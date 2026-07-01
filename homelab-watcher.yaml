@@ -98,16 +98,16 @@ output:
 fan:
   - platform: binary
     output: fan_relay_1
-    name: "Fan 1"
+    name: "Fan Netzteil"
 
   - platform: binary
     output: fan_relay_2
-    name: "Fan 2"
+    name: "Fan Output"
 
   - platform: binary
     output: fan_relay_3
-    name: "Fan 3"
+    name: "Fan Turm oben"
 
   - platform: binary
     output: fan_relay_4
-    name: "Fan 4"
+    name: "Fan Turm unten"

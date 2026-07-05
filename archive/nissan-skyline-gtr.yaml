@@ -1,0 +1,101 @@
+esphome:
+  name: nissan-skyline-gtr
+  friendly_name: Nissan Skyline GTR
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG
+  logs:
+    gpio: DEBUG
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key_GTR
+
+ota:
+  - platform: esphome
+    password: !secret ota_pw_GTR
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Nissan-Skyline-Gtr"
+    password: !secret fb_pw_GTR
+
+captive_portal:
+
+# GPIO Pin Definitionen
+# Relais 1: Unterboden-Beleuchtung (GPIO 18)
+# Relais 2: Blinker (GPIO 21) 
+# Scheinwerfer: Direkt an GPIO (GPIO 19)
+# Hinweis: Viele Relais sind LOW-aktiv (inverted: true)
+
+# Relais und Beleuchtung Definitionen
+switch:
+
+# Output Definitionen
+output:
+  # Unterboden Output
+  - platform: gpio
+    pin:
+      number: GPIO18
+      mode:
+        output: true
+    inverted: true
+    id: underbody_output
+
+  # Blinker Output
+  - platform: gpio
+    pin:
+      number: GPIO21
+      mode:
+        output: true
+    inverted: true
+    id: blinker_output
+
+  # Scheinwerfer Output
+  - platform: gpio
+    pin:
+      number: GPIO19
+      mode:
+        output: true
+    inverted: true
+    id: headlight_output
+
+light:
+  # Unterboden-Beleuchtung als Light
+  - platform: binary
+    name: "Unterboden Beleuchtung"
+    id: underbody_lights
+    output: underbody_output
+    icon: "mdi:car-light-high"
+
+  # Scheinwerfer als Light
+  - platform: binary
+    name: "Scheinwerfer"
+    id: headlights
+    output: headlight_output
+    icon: "mdi:car-light-fog"
+
+  # Blinker Light mit Blinkeffekt
+  - platform: binary
+    name: "Blinker"
+    id: blinker_light
+    output: blinker_output
+    effects:
+      - strobe:
+          name: "Blinken"
+          colors:
+            - state: true
+              duration: 500ms
+            - state: false
+              duration: 500ms

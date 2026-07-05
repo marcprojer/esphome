@@ -1,0 +1,45 @@
+esphome:
+  name: fan-pwm
+  friendly_name: Fan PWM
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "g0wZMqFkOzhpheH7PH1jNCXZRu4Gs3G1O9RQmUsPDnQ="
+
+ota:
+  - platform: esphome
+    password: "e87365e311caa0ae1e5855986cc22f7a"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Fan-Pwm Fallback Hotspot"
+    password: "W5O8yek1krua"
+
+captive_portal:
+
+output:
+  - platform: ledc
+    pin: GPIO25
+    id: mac_fan_pwm
+    frequency: 1000 Hz
+    inverted: false
+
+interval:
+  - interval: 1s
+    then:
+      - output.set_level:
+          id: mac_fan_pwm
+          level: 80%

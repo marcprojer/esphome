@@ -1,0 +1,89 @@
+substitutions:
+## Location & Entity Names (Capitals and Spaces Allowed)
+  name: "IKEA AQ"
+
+esphome:
+  name: "ikea-aq-sensor"
+
+esp8266:
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+
+ota:
+  platform: esphome
+logger:
+  logs:
+    sensor: none
+    binary_sensor: none
+    pm1006: none
+    ccs811: none
+
+## Serial Port for the IKEA Sensor
+uart:
+  - rx_pin: D7
+    # tx_pin: D8
+    baud_rate: 9600
+
+i2c:
+  ## I²C Port - For Temp/Humidity/Pressure
+  sda: D1
+  scl: D2
+  scan: true
+  id: bus_a
+
+binary_sensor:
+  ## Use the on-board LED to show "Fan Running"
+  - platform: gpio
+    name: $name Fan
+    id: fan
+    pin:
+      number: D4
+      inverted: true
+
+  ## Brightness Sensor for HA Automations
+  - platform: template
+    name: $name Bright
+    id: bright
+
+sensor:
+  ## IKEA PMS 2.5um Sensor
+  - platform: pm1006
+    id: aq_sensor
+    pm_2_5:
+      name: $name 2.5µg
+
+  ## Temp/Humidity/Pressure Sensor
+  - platform: bmp280_i2c
+    temperature:
+      name: $name Temperature
+      id: bme_temp
+      oversampling: 4x
+    pressure:
+      name:  $name Pressure
+      id: bme_press
+      oversampling: 4x
+    iir_filter: 16x
+    address: 0x76
+    update_interval: 30s
+
+  ## The IKEA Light Level Sensor
+  - platform: adc
+    id: light_sensor
+    pin: A0
+    update_interval: 1s
+    ## Check the value and turn On/Off our Binary Sensor
+    on_value:
+      - lambda: !lambda |
+          if (x > 0.01) {
+            id(bright).publish_state(true);
+            } else {
+              id(bright).publish_state(false);
+              }
+      # - logger.log:
+      #     format: "Light Level %.6f"
+      #     args: id(light_sensor).state

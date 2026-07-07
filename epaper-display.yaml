@@ -450,7 +450,7 @@ display:
 
       it.printf(12, 218, id(font_xs), FG, "Infos Limmat:");
 
-      const int limmat_xs[3] = {100, 200, 300};
+      const int limmat_xs[3] = {120, 200, 280};
 
       const char* limmat_icons[3] = {
         "\U000F1A80", // limmat temp
@@ -473,14 +473,18 @@ display:
       for (int i = 0; i < 3; i++) {
         int x = limmat_xs[i];
 
-        it.printf(x, 235, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
+        it.printf(x, 230, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
 
         if (valid(limmat_values[i])) {
-          it.printf(x, 263, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
+          it.printf(x, 258, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
         } else {
-          it.printf(x, 263, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
+          it.printf(x, 258, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
         }
       }
       
-      it.line(10, 285, 390, 285, FG);
+      it.line(10, 280, 390, 280, FG);
+
       
+      // ---------- Footer ----------
+
+      it.printf(12, 282, id(font_xxs), FG, "Letzte Aktualisierung: 18:15 Uhr");

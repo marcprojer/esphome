@@ -350,14 +350,14 @@ display:
         it.printf(x, 90, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
 
         // Icon als Glyph
-        it.printf(x, 158, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
+        it.printf(x, 106, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
 
         // Temperaturen unten: High / Low nebeneinander
         if (valid(highs[i]) && valid(lows[i])) {
-          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+          it.printf(x, 134, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
         } else if (valid(highs[i])) {
-          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+          it.printf(x, 134, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
         } else {
-          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
+          it.printf(x, 134, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
       }

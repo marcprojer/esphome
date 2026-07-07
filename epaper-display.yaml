@@ -50,8 +50,8 @@ time:
 
 font:
   - file: "gfonts://Atkinson+Hyperlegible"
-    id: font_xxs
-    size: 7
+    id: font_footer
+    size: 13
     
   - file: "gfonts://Atkinson+Hyperlegible"
     id: font_xs
@@ -487,6 +487,6 @@ display:
       
       // ---------- Footer ----------
 
-      it.printf(12, 282, id(font_xs), FG, "Letzte Aktualisierung: 18:15 Uhr");
+      it.printf(12, 282, id(font_footer), FG, "Letzte Aktualisierung: 18:15 Uhr");
 
-      it.printf(388, 282, id(font_xs), FG, TextAlign::TOP_RIGHT, "01.01.2025");
+      it.printf(388, 282, id(font_footer), FG, TextAlign::TOP_RIGHT, "01.01.2025");

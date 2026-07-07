@@ -49,27 +49,27 @@ time:
     id: ha_time
 
 font:
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_xs
     size: 11
 
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_s
     size: 15
 
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_m
     size: 19
 
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_l
     size: 30
 
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_xl
     size: 46
 
-  - file: "gfonts://Inter"
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_title
     size: 25
 

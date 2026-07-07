@@ -372,6 +372,15 @@ display:
       
       it.line(10, 150, 390, 150, FG);    
 
-      // ---------- Detail rows ----------
+      // ---------- Temperatur innen ----------
 
+      it.printf(12, 155, id(font_s), FG, "Temperatur innen:");
   
+      it.line(10, 220, 390, 220, FG); 
+      
+      // ---------- Limmat ----------
+
+      it.printf(12, 225, id(font_s), FG, "Infos Limmat:");
+      
+      it.line(10, 290, 390, 290, FG); 
+      

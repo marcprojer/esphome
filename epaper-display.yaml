@@ -319,10 +319,10 @@ display:
         : "";
 
       // ---------- Header ----------
-      // it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
+       it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
 
       // Main icon
-      it.printf(28, 6, id(mdi_large), FG, "%s", weather_glyph(current_condition));
+      it.printf(28, 50, id(mdi_large), FG, "%s", weather_glyph(current_condition));
 
       // Condition
       it.printf(108, 48, id(font_l), FG, "%s", condition_de(current_condition));

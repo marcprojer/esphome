@@ -466,8 +466,8 @@ display:
 
       const char* limmat_units[3] = {
         "°C",
-        "m³/s",
-        "m ü.M."
+        "m3/s",
+        "m ue.M."
       };
 
       for (int i = 0; i < 3; i++) {

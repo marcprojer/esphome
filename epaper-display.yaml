@@ -91,7 +91,7 @@ font:
 
   - file: "fonts/materialdesignicons-webfont.ttf"
     id: mdi_medium
-    size: 34
+    size: 30
     glyphs:
       - "\U000F0599" # weather-sunny
       - "\U000F0595" # weather-partly-cloudy
@@ -161,31 +161,6 @@ sensor:
     entity_id: weather.20_hardturmstrasse_escher_wyss
     attribute: temperature
     internal: true
-
-  - platform: homeassistant
-    id: weather_pressure
-    entity_id: weather.20_hardturmstrasse_escher_wyss
-    attribute: pressure
-    internal: true
-
-  - platform: homeassistant
-    id: weather_humidity
-    entity_id: weather.20_hardturmstrasse_escher_wyss
-    attribute: humidity
-    internal: true
-
-  - platform: homeassistant
-    id: weather_wind_speed
-    entity_id: weather.20_hardturmstrasse_escher_wyss
-    attribute: wind_speed
-    internal: true
-
-  - platform: homeassistant
-    id: weather_wind_bearing
-    entity_id: weather.20_hardturmstrasse_escher_wyss
-    attribute: wind_bearing
-    internal: true
-
   - platform: homeassistant
     id: fc_high_0
     entity_id: sensor.epaper_forecast_high_0
@@ -206,7 +181,6 @@ sensor:
     id: fc_high_4
     entity_id: sensor.epaper_forecast_high_4
     internal: true
-
   - platform: homeassistant
     id: fc_low_0
     entity_id: sensor.epaper_forecast_low_0
@@ -281,18 +255,6 @@ display:
         return "--";
       };
 
-      auto bearing_to_text = [](float deg) -> const char* {
-        if (isnan(deg)) return "-";
-        if (deg >= 337.5 || deg < 22.5) return "N";
-        if (deg < 67.5) return "NO";
-        if (deg < 112.5) return "O";
-        if (deg < 157.5) return "SO";
-        if (deg < 202.5) return "S";
-        if (deg < 247.5) return "SW";
-        if (deg < 292.5) return "W";
-        return "NW";
-      };
-
       auto weather_glyph = [](const std::string &c) -> const char* {
         if (c == "sunny" || c == "clear-night") return "\U000F0599";
         if (c == "partlycloudy") return "\U000F0595";
@@ -343,41 +305,10 @@ display:
       it.line(10, 80, 390, 80, FG);
 
       // ---------- Detail rows ----------
-      // Row height 32 px
-      it.printf(18, 123, id(mdi_medium), FG, "\U000F029A");
-      it.printf(58, 126, id(font_s), FG, "Luftdruck");
-      if (valid(id(weather_pressure).state)) {
-        it.printf(382, 126, id(font_s), FG, TextAlign::TOP_RIGHT, "%.1f hPa", id(weather_pressure).state);
-      } else {
-        it.printf(382, 126, id(font_s), FG, TextAlign::TOP_RIGHT, "- hPa");
-      }
-      it.line(10, 151, 390, 151, FG);
 
-      it.printf(18, 156, id(mdi_medium), FG, "\U000F058E");
-      it.printf(58, 159, id(font_s), FG, "Luftfeuchtigkeit");
-      if (valid(id(weather_humidity).state)) {
-        it.printf(382, 159, id(font_s), FG, TextAlign::TOP_RIGHT, "%.0f %%", id(weather_humidity).state);
-      } else {
-        it.printf(382, 159, id(font_s), FG, TextAlign::TOP_RIGHT, "- %%");
-      }
-      it.line(10, 184, 390, 184, FG);
-
-      it.printf(18, 189, id(mdi_medium), FG, "\U000F059D");
-      it.printf(58, 192, id(font_s), FG, "Wind");
-      if (valid(id(weather_wind_speed).state)) {
-        it.printf(
-          382, 192, id(font_s), FG, TextAlign::TOP_RIGHT,
-          "%.1f km/h (%s)",
-          id(weather_wind_speed).state,
-          bearing_to_text(id(weather_wind_bearing).state)
-        );
-      } else {
-        it.printf(382, 192, id(font_s), FG, TextAlign::TOP_RIGHT, "- km/h");
-      }
-      it.line(10, 217, 390, 217, FG);
 
       // ---------- Forecast ----------
-      it.printf(12, 220, id(font_m), FG, "Vorhersage:");
+      it.printf(12, 210, id(font_m), FG, "Vorhersage:");
 
       const int xs[5] = {40, 120, 200, 280, 360};
 
@@ -417,17 +348,17 @@ display:
         int x = xs[i];
 
         // Wochentag
-        it.printf(x, 242, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
+        it.printf(x, 232, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
 
         // Icon als Glyph
-        it.printf(x, 258, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
+        it.printf(x, 248, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
 
         // Temperaturen unten: High / Low nebeneinander
         if (valid(highs[i]) && valid(lows[i])) {
-          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
         } else if (valid(highs[i])) {
-          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
         } else {
-          it.printf(x, 286, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
+          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
       }

@@ -88,7 +88,12 @@ font:
       - "\U000F067F" # weather-snowy-rainy
       - "\U000F0591" # weather-fog
       - "\U000F059D" # weather-windy
-
+      - "\U000F1817" # logia
+      - "\U000F0F48" # office
+      - "\U000F09A0" # bathroom
+      - "\U000F081B" # entrance
+      - "\U000F0FD1" # bedroom
+        
   - file: "fonts/materialdesignicons-webfont.ttf"
     id: mdi_medium
     size: 30
@@ -104,8 +109,11 @@ font:
       - "\U000F067F" # weather-snowy-rainy
       - "\U000F0591" # weather-fog
       - "\U000F059D" # weather-windy
-      - "\U000F029A" # gauge
-      - "\U000F058E" # water-percent
+      - "\U000F1817" # logia
+      - "\U000F0F48" # office
+      - "\U000F09A0" # bathroom
+      - "\U000F081B" # entrance
+      - "\U000F0FD1" # bedroom
 
 text_sensor:
   - platform: homeassistant
@@ -160,6 +168,7 @@ sensor:
     entity_id: weather.20_hardturmstrasse_escher_wyss
     attribute: temperature
     internal: true
+    
   - platform: homeassistant
     id: fc_high_0
     entity_id: sensor.epaper_forecast_high_0
@@ -200,6 +209,7 @@ sensor:
     id: fc_low_4
     entity_id: sensor.epaper_forecast_low_4
     internal: true
+    
   - platform: homeassistant
     id: limmat_temp
     entity_id: sensor.limmat_wassertemperatur
@@ -212,7 +222,28 @@ sensor:
     id: limmat_height
     entity_id: sensor.limmat_wasserstand
     internal: true
-
+    
+  - platform: homeassistant
+    id: temp_logia
+    entity_id: sensor.aqara_temp_logia_temperature
+    internal: true
+  - platform: homeassistant
+    id: temp_bedroom
+    entity_id: sensor.aqara_temp_bedroom_temperatur
+    internal: true
+  - platform: homeassistant
+    id: temp_bathroom
+    entity_id: sensor.aqara_temp_bathroom_temperature
+    internal: true
+  - platform: homeassistant
+    id: temp_office
+    entity_id: sensor.dyson_vent_temperature
+    internal: true
+  - platform: homeassistant
+    id: temp_entrance
+    entity_id: sensor.aqara_temp_entrance_temperature
+    internal: true
+    
 button:
   - platform: template
     name: "ePaper Display aktualisieren"
@@ -375,12 +406,16 @@ display:
       // ---------- Temperatur innen ----------
 
       it.printf(12, 155, id(font_xs), FG, "Temperatur innen:");
+
+      const int xs[5] = {40, 120, 200, 280, 360};
   
       it.line(10, 220, 390, 220, FG); 
       
       // ---------- Limmat ----------
 
       it.printf(12, 225, id(font_xs), FG, "Infos Limmat:");
+
+      const int xs[5] = {40, 120, 200, 280, 360};
       
       it.line(10, 290, 390, 290, FG); 
       

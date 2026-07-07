@@ -49,27 +49,27 @@ time:
     id: ha_time
 
 font:
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_xs
     size: 11
 
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_s
     size: 15
 
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_m
     size: 19
 
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_l
     size: 30
 
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_xl
     size: 46
 
-  - file: "gfonts://Roboto"
+  - file: "gfonts://Inter"
     id: font_title
     size: 25
 

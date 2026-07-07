@@ -311,22 +311,18 @@ display:
       // Screen
       it.fill(BG);
 
-      // Aussenrahmen bewusst weggelassen:
-      // Das Display hat bereits einen physischen Rand.
-
       std::string current_condition = id(weather_condition).has_state()
         ? id(weather_condition).state
         : "";
 
       // ---------- Header ----------
-       it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
 
       // Main icon
-      it.printf(28, 50, id(mdi_large), FG, "%s", weather_glyph(current_condition));
+      it.printf(15, 6, id(mdi_large), FG, "%s", weather_glyph(current_condition));
 
       // Condition
-      it.printf(108, 48, id(font_l), FG, "%s", condition_de(current_condition));
-      it.printf(110, 82, id(font_s), FG, "Knutsch-WG-Trami");
+      it.printf(95, 8, id(font_l), FG, "%s", condition_de(current_condition));
+      it.printf(95, 42, id(font_s), FG, "Knutsch-WG-Trami");
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {

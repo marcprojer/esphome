@@ -276,7 +276,7 @@ display:
     lambda: |-
       const Color BG = COLOR_ON;
       const Color FG = COLOR_OFF;
-      const Color HOT = Color(255, 0, 0);
+      const Color ALERT_COLOR = Color(255, 0, 0);
 
       auto valid = [](float v) -> bool {
         return !isnan(v);
@@ -344,14 +344,14 @@ display:
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {
-        Color temp_color = id(weather_temperature).state >= 25.0 ? HOT : FG;
+        Color temp_color = id(weather_temperature).state >= 25.0 ? ALERT_COLOR : FG;
         it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
       } else {
         it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
-        Color today_range_color = (id(fc_high_0).state >= 25.0 || id(fc_low_0).state >= 25.0) ? HOT : FG;
+        Color today_range_color = (id(fc_high_0).state >= 25.0 || id(fc_low_0).state >= 25.0) ? ALERT_COLOR : FG;
         it.printf(
           386, 46, id(font_m), today_range_color, TextAlign::TOP_RIGHT,
           "%.0f °C / %.0f °C",
@@ -403,7 +403,7 @@ display:
         Color forecast_temp_color = (
           (valid(highs[i]) && highs[i] >= 25.0) ||
           (valid(lows[i]) && lows[i] >= 25.0)
-        ) ? HOT : FG;
+        ) ? ALERT_COLOR : FG;
 
         // Wochentag
         it.printf(x, 85, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
@@ -447,7 +447,7 @@ display:
 
       for (int i = 0; i < 5; i++) {
         int x = room_xs[i];
-        Color room_color = valid(room_temps[i]) && room_temps[i] >= 23.0 ? HOT : FG;
+        Color room_color = valid(room_temps[i]) && room_temps[i] >= 23.0 ? ALERT_COLOR : FG;
 
         it.printf(x, 167, id(mdi_medium), room_color, TextAlign::TOP_CENTER, "%s", room_icons[i]);
 
@@ -490,7 +490,7 @@ display:
       for (int i = 0; i < 4; i++) {
         int x = limmat_xs[i];
         bool is_temperature = i == 0 || i == 3;
-        Color limmat_color = is_temperature && valid(limmat_values[i]) && limmat_values[i] >= 25.0 ? HOT : FG;
+        Color limmat_color = is_temperature && valid(limmat_values[i]) && limmat_values[i] >= 25.0 ? ALERT_COLOR : FG;
 
         it.printf(x, 230, id(mdi_medium), limmat_color, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
 

@@ -410,7 +410,35 @@ display:
 
       it.printf(12, 155, id(font_xs), FG, "Temperatur innen:");
 
-      // const int xs[5] = {40, 120, 200, 280, 360};
+      const int room_xs[5] = {40, 120, 200, 280, 360};
+
+      const char* room_icons[5] = {
+        "\U000F1817", // logia
+        "\U000F0FD1", // bedroom
+        "\U000F09A0", // bathroom
+        "\U000F0F48", // office
+        "\U000F081B"  // entrance
+      };
+
+      float room_temps[5] = {
+        id(temp_logia).state,
+        id(temp_bedroom).state,
+        id(temp_bathroom).state,
+        id(temp_office).state,
+        id(temp_entrance).state
+      };
+
+      for (int i = 0; i < 5; i++) {
+        int x = room_xs[i];
+
+        it.printf(x, 171, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", room_icons[i]);
+
+        if (valid(room_temps[i])) {
+          it.printf(x, 199, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f°", room_temps[i]);
+        } else {
+          it.printf(x, 199, id(font_s), FG, TextAlign::TOP_CENTER, "--.-°");
+        }
+      }
   
       it.line(10, 220, 390, 220, FG); 
       
@@ -418,7 +446,37 @@ display:
 
       it.printf(12, 225, id(font_xs), FG, "Infos Limmat:");
 
-      // const int xs[3] = {100, 200, 300};
+      const int limmat_xs[3] = {100, 200, 300};
+
+      const char* limmat_icons[3] = {
+        "\U000F1A80", // limmat temp
+        "\U000F185A", // limmat flow
+        "\U000F185B"  // limmat height
+      };
+
+      float limmat_values[3] = {
+        id(limmat_temp).state,
+        id(limmat_flow).state,
+        id(limmat_height).state
+      };
+
+      const char* limmat_units[3] = {
+        "°C",
+        "m³/s",
+        "m ü.M."
+      };
+
+      for (int i = 0; i < 3; i++) {
+        int x = limmat_xs[i];
+
+        it.printf(x, 241, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
+
+        if (valid(limmat_values[i])) {
+          it.printf(x, 269, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
+        } else {
+          it.printf(x, 269, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
+        }
+      }
       
       it.line(10, 290, 390, 290, FG); 
       

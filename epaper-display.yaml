@@ -361,3 +361,5 @@ display:
           it.printf(x, 134, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
       }
+      
+      it.line(10, 150, 390, 150, FG);     

@@ -276,6 +276,7 @@ display:
     lambda: |-
       const Color BG = COLOR_ON;
       const Color FG = COLOR_OFF;
+      const Color HOT = Color(255, 0, 0);
 
       auto valid = [](float v) -> bool {
         return !isnan(v);
@@ -343,14 +344,16 @@ display:
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {
-        it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+        Color temp_color = id(weather_temperature).state >= 25.0 ? HOT : FG;
+        it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
       } else {
         it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
+        Color today_range_color = (id(fc_high_0).state >= 25.0 || id(fc_low_0).state >= 25.0) ? HOT : FG;
         it.printf(
-          386, 46, id(font_m), FG, TextAlign::TOP_RIGHT,
+          386, 46, id(font_m), today_range_color, TextAlign::TOP_RIGHT,
           "%.0f °C / %.0f °C",
           id(fc_high_0).state,
           id(fc_low_0).state
@@ -397,6 +400,10 @@ display:
 
       for (int i = 0; i < 5; i++) {
         int x = xs[i];
+        Color forecast_temp_color = (
+          (valid(highs[i]) && highs[i] >= 25.0) ||
+          (valid(lows[i]) && lows[i] >= 25.0)
+        ) ? HOT : FG;
 
         // Wochentag
         it.printf(x, 85, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
@@ -406,9 +413,9 @@ display:
 
         // Temperaturen unten: High / Low nebeneinander
         if (valid(highs[i]) && valid(lows[i])) {
-          it.printf(x, 129, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+          it.printf(x, 129, id(font_s), forecast_temp_color, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
         } else if (valid(highs[i])) {
-          it.printf(x, 129, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+          it.printf(x, 129, id(font_s), forecast_temp_color, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
         } else {
           it.printf(x, 129, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
@@ -440,11 +447,12 @@ display:
 
       for (int i = 0; i < 5; i++) {
         int x = room_xs[i];
+        Color room_color = valid(room_temps[i]) && room_temps[i] >= 23.0 ? HOT : FG;
 
-        it.printf(x, 167, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", room_icons[i]);
+        it.printf(x, 167, id(mdi_medium), room_color, TextAlign::TOP_CENTER, "%s", room_icons[i]);
 
         if (valid(room_temps[i])) {
-          it.printf(x, 195, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f°", room_temps[i]);
+          it.printf(x, 195, id(font_s), room_color, TextAlign::TOP_CENTER, "%.1f°", room_temps[i]);
         } else {
           it.printf(x, 195, id(font_s), FG, TextAlign::TOP_CENTER, "--.-°");
         }
@@ -481,11 +489,13 @@ display:
 
       for (int i = 0; i < 4; i++) {
         int x = limmat_xs[i];
+        bool is_temperature = i == 0 || i == 3;
+        Color limmat_color = is_temperature && valid(limmat_values[i]) && limmat_values[i] >= 25.0 ? HOT : FG;
 
-        it.printf(x, 230, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
+        it.printf(x, 230, id(mdi_medium), limmat_color, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
 
         if (valid(limmat_values[i])) {
-          it.printf(x, 258, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
+          it.printf(x, 258, id(font_s), limmat_color, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
         } else {
           it.printf(x, 258, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
         }

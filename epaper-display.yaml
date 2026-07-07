@@ -308,8 +308,7 @@ display:
 
 
       // ---------- Forecast ----------
-      it.printf(12, 210, id(font_m), FG, "Vorhersage:");
-
+      
       const int xs[5] = {40, 120, 200, 280, 360};
 
       std::string days[5] = {
@@ -348,17 +347,17 @@ display:
         int x = xs[i];
 
         // Wochentag
-        it.printf(x, 232, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
+        it.printf(x, 90, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
 
         // Icon als Glyph
-        it.printf(x, 248, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
+        it.printf(x, 158, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", weather_glyph(conds[i]));
 
         // Temperaturen unten: High / Low nebeneinander
         if (valid(highs[i]) && valid(lows[i])) {
-          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
         } else if (valid(highs[i])) {
-          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
         } else {
-          it.printf(x, 276, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
+          it.printf(x, 186, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }
       }

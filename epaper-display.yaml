@@ -412,7 +412,7 @@ display:
 
       // ---------- Temperatur innen ----------
 
-      it.printf(12, 155, id(font_xs), FG, "Temperatur innen:");
+      it.printf(12, 151, id(font_xs), FG, "Temperatur innen:");
 
       const int room_xs[5] = {40, 120, 200, 280, 360};
 
@@ -448,7 +448,7 @@ display:
       
       // ---------- Limmat ----------
 
-      it.printf(12, 225, id(font_xs), FG, "Infos Limmat:");
+      it.printf(12, 222, id(font_xs), FG, "Infos Limmat:");
 
       const int limmat_xs[3] = {100, 200, 300};
 

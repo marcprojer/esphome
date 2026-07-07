@@ -133,7 +133,6 @@ text_sensor:
     id: fc_day_4
     entity_id: sensor.epaper_forecast_day_4
     internal: true
-
   - platform: homeassistant
     id: fc_cond_0
     entity_id: sensor.epaper_forecast_condition_0

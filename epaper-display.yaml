@@ -201,6 +201,18 @@ sensor:
     id: fc_low_4
     entity_id: sensor.epaper_forecast_low_4
     internal: true
+  - platform: homeassistant
+    id: limmat_temp
+    entity_id: sensor.limmat_wassertemperatur
+    internal: true
+  - platform: homeassistant
+    id: limmat_flow
+    entity_id: sensor.limmat_abfluss
+    internal: true
+  - platform: homeassistant
+    id: limmat_height
+    entity_id: sensor.limmat_wasserstand
+    internal: true
 
 button:
   - platform: template

@@ -114,6 +114,9 @@ font:
       - "\U000F09A0" # bathroom
       - "\U000F081B" # entrance
       - "\U000F0FD1" # bedroom
+      - "\U000F185A" # limmat flow
+      - "\U000F185B" # limmat height
+      - "\U000F1A80" # limmat temp
 
 text_sensor:
   - platform: homeassistant
@@ -407,7 +410,7 @@ display:
 
       it.printf(12, 155, id(font_xs), FG, "Temperatur innen:");
 
-      const int xs[5] = {40, 120, 200, 280, 360};
+      // const int xs[5] = {40, 120, 200, 280, 360};
   
       it.line(10, 220, 390, 220, FG); 
       
@@ -415,7 +418,7 @@ display:
 
       it.printf(12, 225, id(font_xs), FG, "Infos Limmat:");
 
-      const int xs[5] = {40, 120, 200, 280, 360};
+      // const int xs[3] = {100, 200, 300};
       
       it.line(10, 290, 390, 290, FG); 
       

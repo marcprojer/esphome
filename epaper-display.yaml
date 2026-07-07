@@ -321,8 +321,8 @@ display:
       it.printf(15, 6, id(mdi_large), FG, "%s", weather_glyph(current_condition));
 
       // Condition
-      it.printf(95, 8, id(font_l), FG, "%s", condition_de(current_condition));
-      it.printf(95, 42, id(font_s), FG, "Knutsch-WG-Trami");
+      it.printf(95, 4, id(font_l), FG, "%s", condition_de(current_condition));
+      it.printf(95, 38, id(font_s), FG, "Knutsch-WG-Trami");
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {

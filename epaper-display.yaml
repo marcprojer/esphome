@@ -340,7 +340,7 @@ display:
         );
       }
 
-      it.line(10, 100, 390, 100, FG);
+      it.line(10, 70, 390, 70, FG);
 
       // ---------- Detail rows ----------
       // Row height 32 px

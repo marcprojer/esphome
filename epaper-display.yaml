@@ -245,7 +245,6 @@ display:
     busy_pin: GPIO4
     update_interval: 30min
     lambda: |-
-      // Bei deinem Display ist COLOR_ON offenbar hell/weiss und COLOR_OFF dunkel/schwarz.
       const Color BG = COLOR_ON;
       const Color FG = COLOR_OFF;
 
@@ -314,21 +313,20 @@ display:
 
       // Aussenrahmen bewusst weggelassen:
       // Das Display hat bereits einen physischen Rand.
-      // Dadurch bleibt mehr nutzbare Fläche.
 
       std::string current_condition = id(weather_condition).has_state()
         ? id(weather_condition).state
         : "";
 
       // ---------- Header ----------
-      it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
+      // it.printf(12, 6, id(font_title), FG, "Tramdepot Hard");
 
       // Main icon
-      it.printf(28, 50, id(mdi_large), FG, "%s", weather_glyph(current_condition));
+      it.printf(28, 6, id(mdi_large), FG, "%s", weather_glyph(current_condition));
 
       // Condition
       it.printf(108, 48, id(font_l), FG, "%s", condition_de(current_condition));
-      it.printf(110, 82, id(font_s), FG, "MeteoSwiss");
+      it.printf(110, 82, id(font_s), FG, "Knutsch-WG-Trami");
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {
@@ -383,7 +381,6 @@ display:
       it.line(10, 217, 390, 217, FG);
 
       // ---------- Forecast ----------
-      // Mehr Platz als vorher: 5 Spalten, kleinere Icons, Text nicht unter Icons gequetscht.
       it.printf(12, 220, id(font_m), FG, "Vorhersage:");
 
       const int xs[5] = {40, 120, 200, 280, 360};

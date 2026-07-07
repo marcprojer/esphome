@@ -487,4 +487,4 @@ display:
       
       // ---------- Footer ----------
 
-      it.printf(12, 282, id(font_xxs), FG, "Letzte Aktualisierung: 18:15 Uhr");
+      it.printf(12, 282, id(font_xs), FG, "Letzte Aktualisierung: 18:15 Uhr");

@@ -326,14 +326,14 @@ display:
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {
-        it.printf(386, 6, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+        it.printf(386, 0, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
       } else {
-        it.printf(386, 6, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
+        it.printf(386, 0, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
         it.printf(
-          386, 52, id(font_m), FG, TextAlign::TOP_RIGHT,
+          386, 46, id(font_m), FG, TextAlign::TOP_RIGHT,
           "%.0f °C / %.0f °C",
           id(fc_high_0).state,
           id(fc_low_0).state

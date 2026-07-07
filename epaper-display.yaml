@@ -288,9 +288,9 @@ display:
 
       // Temperature right
       if (valid(id(weather_temperature).state)) {
-        it.printf(386, 0, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+        it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
       } else {
-        it.printf(386, 0, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
+        it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {

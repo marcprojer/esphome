@@ -50,6 +50,10 @@ time:
 
 font:
   - file: "gfonts://Atkinson+Hyperlegible"
+    id: font_xxs
+    size: 7
+    
+  - file: "gfonts://Atkinson+Hyperlegible"
     id: font_xs
     size: 11
 

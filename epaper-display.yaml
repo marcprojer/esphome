@@ -412,7 +412,7 @@ display:
 
       // ---------- Temperatur innen ----------
 
-      it.printf(12, 151, id(font_xs), FG, "Temperatur innen:");
+      it.printf(12, 152, id(font_xs), FG, "Temperatur innen:");
 
       const int room_xs[5] = {40, 120, 200, 280, 360};
 
@@ -435,20 +435,20 @@ display:
       for (int i = 0; i < 5; i++) {
         int x = room_xs[i];
 
-        it.printf(x, 171, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", room_icons[i]);
+        it.printf(x, 167, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", room_icons[i]);
 
         if (valid(room_temps[i])) {
-          it.printf(x, 199, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f°", room_temps[i]);
+          it.printf(x, 195, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f°", room_temps[i]);
         } else {
-          it.printf(x, 199, id(font_s), FG, TextAlign::TOP_CENTER, "--.-°");
+          it.printf(x, 195, id(font_s), FG, TextAlign::TOP_CENTER, "--.-°");
         }
       }
   
-      it.line(10, 220, 390, 220, FG); 
+      it.line(10, 216, 390, 216, FG); 
       
       // ---------- Limmat ----------
 
-      it.printf(12, 222, id(font_xs), FG, "Infos Limmat:");
+      it.printf(12, 218, id(font_xs), FG, "Infos Limmat:");
 
       const int limmat_xs[3] = {100, 200, 300};
 
@@ -473,14 +473,14 @@ display:
       for (int i = 0; i < 3; i++) {
         int x = limmat_xs[i];
 
-        it.printf(x, 241, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
+        it.printf(x, 235, id(mdi_medium), FG, TextAlign::TOP_CENTER, "%s", limmat_icons[i]);
 
         if (valid(limmat_values[i])) {
-          it.printf(x, 269, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
+          it.printf(x, 263, id(font_s), FG, TextAlign::TOP_CENTER, "%.1f %s", limmat_values[i], limmat_units[i]);
         } else {
-          it.printf(x, 269, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
+          it.printf(x, 263, id(font_s), FG, TextAlign::TOP_CENTER, "--.- %s", limmat_units[i]);
         }
       }
       
-      it.line(10, 290, 390, 290, FG); 
+      it.line(10, 285, 390, 285, FG);
       

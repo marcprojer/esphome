@@ -256,7 +256,11 @@ sensor:
     id: temp_hardturmstrasse130
     entity_id: sensor.stadtklima_hardturmstrasse_130_temperatur
     internal: true
-    
+  - platform: homeassistant
+    id: temp_turbinenplatz
+    entity_id: sensor.stadtklima_turbinenplatz_temperatur
+    internal: true
+
 button:
   - platform: template
     name: "ePaper Display aktualisieren"
@@ -343,9 +347,9 @@ display:
       it.printf(95, 44, id(font_s), FG, "Knutsch-WG-Trami");
 
       // Temperature right
-      if (valid(id(temp_hardturmstrasse130).state)) {
-        Color temp_color = id(temp_hardturmstrasse130).state >= 25.0 ? ALERT_COLOR : FG;
-        it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(temp_hardturmstrasse130).state);
+      if (valid(id(temp_turbinenplatz).state)) {
+        Color temp_color = id(temp_turbinenplatz).state >= 25.0 ? ALERT_COLOR : FG;
+        it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(temp_turbinenplatz).state);
       } else {
         it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }

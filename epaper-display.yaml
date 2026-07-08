@@ -343,9 +343,9 @@ display:
       it.printf(95, 44, id(font_s), FG, "Knutsch-WG-Trami");
 
       // Temperature right
-      if (valid(id(weather_temperature).state)) {
-        Color temp_color = id(weather_temperature).state >= 25.0 ? ALERT_COLOR : FG;
-        it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(weather_temperature).state);
+      if (valid(id(temp_hardturmstrasse130).state)) {
+        Color temp_color = id(temp_hardturmstrasse130).state >= 25.0 ? ALERT_COLOR : FG;
+        it.printf(386, 1, id(font_xl), temp_color, TextAlign::TOP_RIGHT, "%.1f °C", id(temp_hardturmstrasse130).state);
       } else {
         it.printf(386, 1, id(font_xl), FG, TextAlign::TOP_RIGHT, "--.- °C");
       }

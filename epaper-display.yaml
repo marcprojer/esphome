@@ -267,6 +267,18 @@ button:
     on_press:
       - component.update: eink_display
 
+binary_sensor:
+  - platform: gpio
+    id: epaper_refresh_touch
+    name: "ePaper Display Touch aktualisieren"
+    pin:
+      number: GPIO32
+      mode: INPUT
+    filters:
+      - delayed_on: 10ms
+    on_press:
+      - component.update: eink_display
+
 display:
   - platform: epaper_spi
     id: eink_display

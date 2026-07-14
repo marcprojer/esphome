@@ -372,7 +372,7 @@ text_sensor:
 
   - platform: homeassistant
     id: homelab_fans
-    entity_id: fan.homelab_watcher_fan_1
+    entity_id: fan.fans_homelab
     on_value:
       then:
         - lvgl.widget.update:
@@ -1178,7 +1178,7 @@ lvgl:
                       - homeassistant.action:
                           action: fan.toggle
                           data:
-                            entity_id: fan.homelab_watcher_fan_1
+                            entity_id: fan.fans_homelab
 
               - button:
                   id: btn_26

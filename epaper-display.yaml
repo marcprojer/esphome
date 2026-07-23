@@ -272,13 +272,25 @@ binary_sensor:
     id: epaper_refresh_touch
     name: "ePaper Display Touch aktualisieren"
     pin:
-      number: GPIO32
+      number: GPIO19
       mode: INPUT
     filters:
       - delayed_on: 10ms
     on_press:
       - component.update: eink_display
 
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_leds
+    name: "Status LEDs"
+
+    chipset: ws2812
+    pin: GPIO21
+    num_leds: 8
+    rgb_order: GRB
+
+    restore_mode: RESTORE_DEFAULT_OFF
+        
 display:
   - platform: epaper_spi
     id: eink_display

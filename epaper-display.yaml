@@ -290,6 +290,24 @@ light:
     rgb_order: GRB
 
     restore_mode: RESTORE_DEFAULT_OFF
+
+    effects:
+      - addressable_rainbow:
+          name: Regenbogen
+      - addressable_color_wipe:
+          name: Color Wipe
+      - addressable_scan:
+          name: Scanner
+      - addressable_twinkle:
+          name: Twinkle
+      - addressable_random_twinkle:
+          name: Random Twinkle
+      - addressable_fireworks:
+          name: Feuerwerk
+      - pulse:
+          name: Pulsieren
+      - random:
+          name: Zufällig
         
 display:
   - platform: epaper_spi

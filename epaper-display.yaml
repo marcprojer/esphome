@@ -410,7 +410,7 @@ display:
         it.get_text_bounds(0, 0, today_sep_text, id(font_m), TextAlign::TOP_LEFT, &x1, &y1, &w_sep, &h2);
         it.get_text_bounds(0, 0, today_low_text, id(font_m), TextAlign::TOP_LEFT, &x1, &y1, &w_low, &h3);
 
-        int today_left = 386 - (w_high + w_sep + w_low) / 2;
+        int today_left = 386 - (w_high + w_sep + w_low);
         it.printf(today_left, 46, id(font_m), today_high_color, TextAlign::TOP_LEFT, "%s", today_high_text);
         it.printf(today_left + w_high, 46, id(font_m), FG, TextAlign::TOP_LEFT, "%s", today_sep_text);
         it.printf(today_left + w_high + w_sep, 46, id(font_m), today_low_color, TextAlign::TOP_LEFT, "%s", today_low_text);

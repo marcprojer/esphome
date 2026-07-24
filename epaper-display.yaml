@@ -397,13 +397,11 @@ display:
       }
 
       if (valid(id(fc_high_0).state) && valid(id(fc_low_0).state)) {
-        Color today_range_color = (id(fc_high_0).state >= 25.0 || id(fc_low_0).state >= 25.0) ? ALERT_COLOR : FG;
-        it.printf(
-          386, 46, id(font_m), today_range_color, TextAlign::TOP_RIGHT,
-          "%.0f °C / %.0f °C",
-          id(fc_high_0).state,
-          id(fc_low_0).state
-        );
+        Color today_high_color = id(fc_high_0).state >= 25.0 ? ALERT_COLOR : FG;
+        Color today_low_color = id(fc_low_0).state >= 25.0 ? ALERT_COLOR : FG;
+        it.printf(350, 46, id(font_m), today_high_color, TextAlign::TOP_RIGHT, "%.0f °C", id(fc_high_0).state);
+        it.printf(360, 46, id(font_m), FG, TextAlign::TOP_CENTER, "/");
+        it.printf(386, 46, id(font_m), today_low_color, TextAlign::TOP_RIGHT, "%.0f °C", id(fc_low_0).state);
       }
 
       it.line(10, 80, 390, 80, FG);
@@ -446,10 +444,8 @@ display:
 
       for (int i = 0; i < 5; i++) {
         int x = xs[i];
-        Color forecast_temp_color = (
-          (valid(highs[i]) && highs[i] >= 25.0) ||
-          (valid(lows[i]) && lows[i] >= 25.0)
-        ) ? ALERT_COLOR : FG;
+        Color forecast_high_color = valid(highs[i]) && highs[i] >= 25.0 ? ALERT_COLOR : FG;
+        Color forecast_low_color = valid(lows[i]) && lows[i] >= 25.0 ? ALERT_COLOR : FG;
 
         // Wochentag
         it.printf(x, 85, id(font_s), FG, TextAlign::TOP_CENTER, "%s", day_de(days[i]));
@@ -459,9 +455,13 @@ display:
 
         // Temperaturen unten: High / Low nebeneinander
         if (valid(highs[i]) && valid(lows[i])) {
-          it.printf(x, 129, id(font_s), forecast_temp_color, TextAlign::TOP_CENTER, "%.0f°/%.0f°", highs[i], lows[i]);
+          it.printf(x - 12, 129, id(font_s), forecast_high_color, TextAlign::TOP_RIGHT, "%.0f°", highs[i]);
+          it.printf(x, 129, id(font_s), FG, TextAlign::TOP_CENTER, "/");
+          it.printf(x + 12, 129, id(font_s), forecast_low_color, TextAlign::TOP_LEFT, "%.0f°", lows[i]);
         } else if (valid(highs[i])) {
-          it.printf(x, 129, id(font_s), forecast_temp_color, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+          it.printf(x, 129, id(font_s), forecast_high_color, TextAlign::TOP_CENTER, "%.0f°", highs[i]);
+        } else if (valid(lows[i])) {
+          it.printf(x, 129, id(font_s), forecast_low_color, TextAlign::TOP_CENTER, "%.0f°", lows[i]);
         } else {
           it.printf(x, 129, id(font_s), FG, TextAlign::TOP_CENTER, "--°");
         }

@@ -31,8 +31,8 @@ captive_portal:
 
 i2c:
   - id: i2c_1
-    scl: 7
-    sda: 6
+    scl: 17
+    sda: 16
 
 sensor:
   - platform: sht4x

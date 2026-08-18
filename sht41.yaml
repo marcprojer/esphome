@@ -36,11 +36,11 @@ i2c:
 
 sensor:
   - platform: sht4x
-    id: sensor_sht4x_1
+    id: sensor_sht41_1
     i2c_id: i2c_1
     humidity:
       name: Humidity
-      id: sensor_sht4x_1_humidity
+      id: sensor_sht41_1_humidity
     temperature:
       name: Temperature
-      id: sensor_sht4x_1_temperature
+      id: sensor_sht41_1_temperature

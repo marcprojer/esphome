@@ -111,12 +111,14 @@ font:
       - 󱏳  # fish-off
 
 image:
-  - file: pictures/logo.png
+  - platform: file
+    file: pictures/logo.png
     id: img_logo
     type: GRAYSCALE
     transparency: opaque
     invert_alpha: true
-  - file: pictures/claude.png
+  - platform: file
+    file: pictures/claude.png
     id: img_claude
     type: GRAYSCALE
     transparency: opaque
@@ -1441,8 +1443,6 @@ lvgl:
                 grid_columns: [fr(1), fr(1), fr(1)]
                 grid_rows: [fr(1), fr(1), fr(1), fr(1)]
               pad_all: 5px
-              pad_column: 5px
-              pad_row: 5px
               outline_pad: 5px
               widgets:
                 # Add new buttons/widgets here

@@ -66,9 +66,14 @@ font:
     size: 30                                            
     glyphs:                                             
       - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  - file: "fonts/Arimo-Regular.ttf"                     
+  - file: "fonts/Arimo-Regular.ttf"
     id: arimo14
     size: 14
+    glyphs:
+      - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  - file: "fonts/Arimo-Regular.ttf"
+    id: arimo20
+    size: 20
     glyphs:
       - " -.,:°%0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
   - file: "fonts/Arimo-Regular.ttf"  
@@ -108,6 +113,11 @@ font:
 image:
   - file: pictures/logo.png
     id: img_logo
+    type: GRAYSCALE
+    transparency: opaque
+    invert_alpha: true
+  - file: pictures/claude.png
+    id: img_claude
     type: GRAYSCALE
     transparency: opaque
     invert_alpha: true
@@ -518,6 +528,119 @@ text_sensor:
 
               return std::string{};
 
+# Claude usage sensors (sub_page_claude)
+  - platform: homeassistant
+    id: claude_session_usage
+    entity_id: sensor.homelab_claude_usage_session_usage
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_session_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              static char buf[16];
+              snprintf(buf, sizeof(buf), "%.0f%%", std::atof(x.c_str()));
+              return std::string{buf};
+
+  - platform: homeassistant
+    id: claude_session_limit_usage
+    entity_id: sensor.homelab_claude_usage_session_limit_usage
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_session_lim_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              static char buf[16];
+              snprintf(buf, sizeof(buf), "%.0f%%", std::atof(x.c_str()));
+              return std::string{buf};
+
+  - platform: homeassistant
+    id: claude_session_reset_time
+    entity_id: sensor.homelab_claude_usage_session_reset_time
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_session_reset_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              if (x.size() >= 16 && x[10] == 'T') {
+                return x.substr(5, 5) + " " + x.substr(11, 5);
+              }
+              return x.substr(0, 15);
+
+  - platform: homeassistant
+    id: claude_week_usage
+    entity_id: sensor.homelab_claude_usage_week_usage
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_week_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              static char buf[16];
+              snprintf(buf, sizeof(buf), "%.0f%%", std::atof(x.c_str()));
+              return std::string{buf};
+
+  - platform: homeassistant
+    id: claude_week_usage_pace
+    entity_id: sensor.homelab_claude_usage_week_usage_pace
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_pace_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              char* end;
+              float v = std::strtof(x.c_str(), &end);
+              if (end != x.c_str() && *end == '\0') {
+                static char buf[16];
+                snprintf(buf, sizeof(buf), "%.0f%%", v);
+                return std::string{buf};
+              }
+              return x.substr(0, 12);
+
+  - platform: homeassistant
+    id: claude_weekly_all_models_limit_usage
+    entity_id: sensor.homelab_claude_usage_weekly_all_models_limit_usage
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_week_lim_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              static char buf[16];
+              snprintf(buf, sizeof(buf), "%.0f%%", std::atof(x.c_str()));
+              return std::string{buf};
+
+  - platform: homeassistant
+    id: claude_weekly_reset_time
+    entity_id: sensor.homelab_claude_usage_weekly_reset_time
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_claude_week_reset_val
+            text: !lambda |-
+              if (x.empty() || x == "unknown" || x == "unavailable" || x == "none") {
+                return std::string{"--"};
+              }
+              if (x.size() >= 16 && x[10] == 'T') {
+                return x.substr(5, 5) + " " + x.substr(11, 5);
+              }
+              return x.substr(0, 15);
+
 # Current time sensor for clock button display
   - platform: template
     name: "Current Time"
@@ -924,13 +1047,16 @@ lvgl:
                 grid_cell_row_pos: 1
                 grid_cell_x_align: STRETCH
                 grid_cell_y_align: STRETCH
-                checkable: true
+                bg_color: 0xFFFFFF
+                pressed:
+                  bg_color: default_button_pressed_bg_color
                 widgets:
-                  - label:
-                      id: lbl_btn_19
-                      text: "19"
-                      text_font: arimo36
+                  - image:
+                      src: img_claude
                       align: center
+                on_click:
+                  then:
+                  - lvgl.page.show: sub_page_claude
 
 
             - button:
@@ -1296,3 +1422,189 @@ lvgl:
                                   entity_id: fan.dyson_vent
                                   percentage: !lambda |-
                                     return std::min(100, std::max(0, (int(x + 5) / 10) * 10));
+
+# ============================================================================================================
+#
+#                     Sub page for Claude
+#
+# ============================================================================================================
+
+    - id: sub_page_claude
+      pad_all: 0
+      widgets:
+          - obj:
+              width: 320
+              height: 240
+              bg_color: room_bg_color
+              layout:
+                type: grid
+                grid_columns: [fr(1), fr(1), fr(1)]
+                grid_rows: [fr(1), fr(1), fr(1), fr(1)]
+              pad_all: 5px
+              pad_column: 5px
+              pad_row: 5px
+              outline_pad: 5px
+              widgets:
+                # Add new buttons/widgets here
+
+              # --- Back button ---
+              - button:
+                  id: btn_claude_back
+                  grid_cell_column_pos: 2
+                  grid_cell_row_pos: 0
+                  grid_cell_row_span: 4
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pressed:
+                    bg_color: default_button_pressed_bg_color
+                  widgets:
+                    - label:
+                        id: lbl_btn_claude_back
+                        text: "󰌑"
+                        text_font: font_mdi
+                        align: center
+                  on_click:
+                    then:
+                    - lvgl.page.show: sub_page_menu
+
+              # --- Session usage ---
+              - obj:
+                  id: tile_claude_session
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 0
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Session"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_session_val
+                        text: "--"
+                        text_font: arimo20
+                        align: bottom_mid
+
+              # --- Session limit usage ---
+              - obj:
+                  id: tile_claude_session_lim
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 0
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Sess. Limit"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_session_lim_val
+                        text: "--"
+                        text_font: arimo20
+                        align: bottom_mid
+
+              # --- Session reset time ---
+              - obj:
+                  id: tile_claude_session_reset
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 1
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Sess. Reset"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_session_reset_val
+                        text: "--"
+                        text_font: arimo14
+                        align: bottom_mid
+
+              # --- Week usage pace ---
+              - obj:
+                  id: tile_claude_pace
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 1
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Week Pace"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_pace_val
+                        text: "--"
+                        text_font: arimo20
+                        align: bottom_mid
+
+              # --- Week usage ---
+              - obj:
+                  id: tile_claude_week
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 2
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Week"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_week_val
+                        text: "--"
+                        text_font: arimo20
+                        align: bottom_mid
+
+              # --- Weekly all models limit usage ---
+              - obj:
+                  id: tile_claude_week_lim
+                  grid_cell_column_pos: 1
+                  grid_cell_row_pos: 2
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Week Limit"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_week_lim_val
+                        text: "--"
+                        text_font: arimo20
+                        align: bottom_mid
+
+              # --- Weekly reset time ---
+              - obj:
+                  id: tile_claude_week_reset
+                  grid_cell_column_pos: 0
+                  grid_cell_row_pos: 3
+                  grid_cell_column_span: 2
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+                  bg_color: default_button_bg_color
+                  pad_all: 2px
+                  widgets:
+                    - label:
+                        text: "Week Reset"
+                        text_font: arimo12
+                        align: top_mid
+                    - label:
+                        id: lbl_claude_week_reset_val
+                        text: "--"
+                        text_font: arimo14
+                        align: bottom_mid

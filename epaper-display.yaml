@@ -318,7 +318,6 @@ display:
     reset_pin: GPIO16
     reset_duration: 50ms
     busy_pin: GPIO4
-    update_interval: 30min
     lambda: |-
       const Color BG = COLOR_ON;
       const Color FG = COLOR_OFF;

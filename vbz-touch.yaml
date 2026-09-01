@@ -335,13 +335,13 @@ lvgl:
                               auto awake_state = id(vbz_display_awake_text).state;
                               return (awake_state == "true" || awake_state == "True" || awake_state == "on" || awake_state == "ON" || awake_state == "1");
                           then:
-                            - homeassistant.service:
-                                service: script.vbz_display_off
+                            - homeassistant.action:
+                                action: script.vbz_display_off
                           else:
-                            - homeassistant.service:
-                                service: script.vbz_display_on
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                            - homeassistant.action:
+                                action: script.vbz_display_on
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_awake
 
@@ -377,10 +377,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_all
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_all
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -400,10 +400,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_tram
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_tram
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -423,10 +423,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_bus
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_bus
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -446,10 +446,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_scroll_down
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_scroll_down
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -469,10 +469,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_scroll_up
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_scroll_up
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -544,10 +544,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_a
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_a
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -567,10 +567,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_b
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_b
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -590,10 +590,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_c
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_c
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -613,10 +613,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_d
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_d
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -636,10 +636,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_e
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_e
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -659,10 +659,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_platform_f
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_platform_f
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
 
@@ -682,10 +682,10 @@ lvgl:
                         align: center
                   on_click:
                     then:
-                      - homeassistant.service:
-                          service: script.vbz_display_all
-                      - homeassistant.service:
-                          service: homeassistant.update_entity
+                      - homeassistant.action:
+                          action: script.vbz_display_all
+                      - homeassistant.action:
+                          action: homeassistant.update_entity
                           data:
                             entity_id: sensor.vbz_display_mode
                       - lvgl.page.show:

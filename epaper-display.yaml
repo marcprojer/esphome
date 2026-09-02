@@ -256,7 +256,7 @@ button:
     on_press:
       - homeassistant.action:
           action: homeassistant.update_entity
-          data:
+          target:
             entity_id:
               - weather.20_hardturmstrasse_escher_wyss
               - sensor.epaper_forecast_day_0
@@ -304,7 +304,7 @@ binary_sensor:
     on_press:
       - homeassistant.action:
           action: homeassistant.update_entity
-          data:
+          target:
             entity_id:
               - weather.20_hardturmstrasse_escher_wyss
               - sensor.epaper_forecast_day_0

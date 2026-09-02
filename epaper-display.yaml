@@ -265,11 +265,6 @@ binary_sensor:
       mode: INPUT
     filters:
       - delayed_on: 10ms
-    on_press:
-      - homeassistant.action:
-          action: script.turn_on
-          data:
-            entity_id: script.epaper_refresh
 
 light:
   - platform: esp32_rmt_led_strip

@@ -256,17 +256,17 @@ button:
     on_press:
       - component.update: eink_display
 
-############binary_sensor:
-##########  - platform: gpio
-#########    id: epaper_refresh_touch
- ########   name: "ePaper Display Touch aktualisieren"
- #######   pin:
-  ######    number: GPIO19
- #####     mode: INPUT
- ####   filters:
-  ###    - delayed_on: 10ms
-  ##  on_press:
-  #    - component.update: eink_display
+binary_sensor:
+  - platform: gpio
+    id: epaper_refresh_touch
+   name: "ePaper Display Touch aktualisieren"
+   pin:
+    number: GPIO19
+      mode: INPUT
+    filters:
+      - delayed_on: 10ms
+    on_press:
+      - component.update: eink_display
 
 
 light:
@@ -308,6 +308,7 @@ display:
     reset_pin: GPIO16
     reset_duration: 50ms
     busy_pin: GPIO4
+    update_interval: never
     lambda: |-
       const Color BG = COLOR_ON;
       const Color FG = COLOR_OFF;
@@ -321,7 +322,7 @@ display:
         if (c == "sunny") return "Sonnig";
         if (c == "clear-night") return "Klar";
         if (c == "partlycloudy") return "Teilw. bew.";
-        if (c == "cloudy") return "Bewölkt";
+        if (c == "cloudy") return "Bewoelkt";
         if (c == "rainy") return "Regen";
         if (c == "pouring") return "Starkregen";
         if (c == "lightning") return "Gewitter";

@@ -276,7 +276,7 @@ light:
     chipset: ws2812
     pin: GPIO21
     num_leds: 8
-    rgb_order: GRB
+    channel_colors: GRB
 
     restore_mode: RESTORE_DEFAULT_OFF
 

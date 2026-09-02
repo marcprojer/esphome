@@ -265,7 +265,7 @@ text_sensor:
 
   - platform: homeassistant
     id: homeoffice_plug
-    entity_id: switch.plug_home_office
+    entity_id: switch.home_office_desk
     on_value:
       then:
         - lvgl.widget.update:
@@ -859,7 +859,7 @@ lvgl:
                       - homeassistant.action:
                           action: switch.toggle
                           data:
-                            entity_id: switch.plug_home_office
+                            entity_id: switch.home_office_desk
 
               - button:
                   id: btn_5

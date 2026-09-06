@@ -28,6 +28,8 @@ wifi:
     password: !secret fb_pw_EINK
 
 esp32_ble_tracker:
+  scan_parameters:
+    active: false
 
 bluetooth_proxy:
   active: true

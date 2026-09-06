@@ -27,6 +27,11 @@ wifi:
     ssid: "Epaper-Display Fallback Hotspot"
     password: !secret fb_pw_EINK
 
+esp32_ble_tracker:
+
+bluetooth_proxy:
+  active: true
+
 captive_portal:
 
 spi:

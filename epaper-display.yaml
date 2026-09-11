@@ -233,7 +233,7 @@ sensor:
     internal: true
   - platform: homeassistant
     id: temp_bedroom
-    entity_id: sensor.aqara_temp_bedroom_temperatur
+    entity_id: sensor.dyson_vent_temperature
     internal: true
   - platform: homeassistant
     id: temp_bathroom
@@ -241,7 +241,7 @@ sensor:
     internal: true
   - platform: homeassistant
     id: temp_office
-    entity_id: sensor.dyson_vent_temperature
+    entity_id: sensor.office_messstation_office_temperature
     internal: true
   - platform: homeassistant
     id: temp_entrance

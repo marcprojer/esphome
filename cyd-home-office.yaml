@@ -177,8 +177,8 @@ switch:
 
 text_sensor:
   - platform: homeassistant
-    id: aqara_temp_logia
-    entity_id: sensor.aqara_temp_logia_temperature
+    id: stadtklima_turbinenplatz
+    entity_id: sensor.stadtklima_turbinenplatz_temperatur
     on_value:
       then:
         - lvgl.label.update:
@@ -366,7 +366,7 @@ text_sensor:
 
   - platform: homeassistant
     id: homelab_leistung
-    entity_id: sensor.shelly_homelab_leistung
+    entity_id: sensor.homelab_shelly_homelab_leistung
     on_value:
       then:
         - lvgl.label.update:

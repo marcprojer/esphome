@@ -287,8 +287,8 @@ text_sensor:
               return buf;
 
   - platform: homeassistant
-    id: dyson_vent_temperature
-    entity_id: sensor.dyson_vent_temperature
+    id: office_temperature
+    entity_id: sensor.office_messstation_office_temperature
     on_value:
       then:
         - lvgl.label.update:

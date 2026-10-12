@@ -21,8 +21,7 @@ logger:
 
 api:
   encryption:
-    key: !secret aquarium_display_api_key
-
+    key: !secret aquarium_display__encryption_key
 ota:
   - platform: esphome
     encryption:

@@ -26,7 +26,6 @@ api:
 ota:
   - platform: esphome
     encryption:
-      key: !secret aquarium_display_api_key
 
 wifi:
   ssid: !secret wifi_ssid

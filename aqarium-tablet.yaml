@@ -129,8 +129,8 @@ lvgl:
             checkable: true
             on_click:
               then:
-                - homeassistant.service:
-                    service: switch.toggle
+                - homeassistant.action:
+                    action: switch.toggle
                     data:
                       entity_id: switch.aqarium_aqarium_licht_aquarium_licht
             widgets:
@@ -147,8 +147,8 @@ lvgl:
             checkable: true
             on_click:
               then:
-                - homeassistant.service:
-                    service: switch.toggle
+                - homeassistant.action:
+                    action: switch.toggle
                     data:
                       entity_id: switch.aqarium_co2_anlage
             widgets:

@@ -30,6 +30,13 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
+font:
+  - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf"
+    id: mdi_28
+    size: 28
+    bpp: 4
+    glyphs: ["\U000F02DC", "\U000F0335", "\U000F07E4", "\U000F023A", "\U000F0493"]
+
 # Display-SPI (nur für die Init-Befehle des ST7701S)
 spi:
   - id: lcd_spi
@@ -88,23 +95,61 @@ touchscreen:
 # Zustand der HA-Schalter auf dem Display anzeigen
 binary_sensor:
   - platform: homeassistant
-    id: ha_co2
-    entity_id: switch.aqarium_co2_anlage
-    on_state:
-      then:
-        - lvgl.widget.update:
-            id: btn_co2
-            state:
-              checked: !lambda return x;
-  - platform: homeassistant
     id: ha_licht
     entity_id: switch.aqarium_aqarium_licht_aquarium_licht
-    on_state:
-      then:
-        - lvgl.widget.update:
-            id: btn_licht
-            state:
-              checked: !lambda return x;
+    on_press:
+      - lvgl.widget.update:
+          id: btn_licht
+          state:
+            checked: true
+      - lvgl.label.update:
+          id: lbl_licht_state
+          text: "An"
+          text_color: 0x2ECC71
+      - lvgl.widget.update:
+          id: water
+          bg_color: 0x2B8CC4
+      - lvgl.widget.update:
+          id: lamp
+          bg_color: 0xFFE08A
+    on_release:
+      - lvgl.widget.update:
+          id: btn_licht
+          state:
+            checked: false
+      - lvgl.label.update:
+          id: lbl_licht_state
+          text: "Aus"
+          text_color: 0x8A949E
+      - lvgl.widget.update:
+          id: water
+          bg_color: 0x143A52
+      - lvgl.widget.update:
+          id: lamp
+          bg_color: 0x4A525A
+  - platform: homeassistant
+    id: ha_co2
+    entity_id: switch.aqarium_co2_anlage
+    on_press:
+      - lvgl.widget.update:
+          id: btn_co2
+          state:
+            checked: true
+      - lvgl.label.update:
+          id: lbl_co2_state
+          text: "An"
+          text_color: 0x2ECC71
+      - lvgl.widget.show: [bub1, bub2, bub3, bub4]
+    on_release:
+      - lvgl.widget.update:
+          id: btn_co2
+          state:
+            checked: false
+      - lvgl.label.update:
+          id: lbl_co2_state
+          text: "Aus"
+          text_color: 0x8A949E
+      - lvgl.widget.hide: [bub1, bub2, bub3, bub4]
 
 lvgl:
   displays:
@@ -114,44 +159,179 @@ lvgl:
   pages:
     - id: main_page
       widgets:
-        - label:
-            text: "Aquarium"
-            align: TOP_MID
-            y: 20
-            text_font: montserrat_28
-        - button:
-            id: btn_licht
-            x: 30
-            y: 100
-            width: 420
-            height: 150
-            checkable: true
-            on_click:
-              then:
-                - homeassistant.action:
-                    action: switch.toggle
-                    data:
-                      entity_id: switch.aqarium_aqarium_licht_aquarium_licht
+        # Hintergrund
+        - obj:
+            x: 0
+            y: 0
+            width: 480
+            height: 480
+            radius: 0
+            border_width: 0
+            bg_color: 0x14181C
+            scrollable: false
             widgets:
-              - label:
-                  text: "Licht"
-                  align: CENTER
-                  text_font: montserrat_28
-        - button:
-            id: btn_co2
-            x: 30
-            y: 280
-            width: 420
-            height: 150
-            checkable: true
-            on_click:
-              then:
-                - homeassistant.action:
-                    action: switch.toggle
-                    data:
-                      entity_id: switch.aqarium_co2_anlage
-            widgets:
-              - label:
-                  text: "CO2"
-                  align: CENTER
-                  text_font: montserrat_28
+              # Icon-Leiste links
+              - obj:
+                  x: 0
+                  y: 0
+                  width: 64
+                  height: 480
+                  radius: 0
+                  border_width: 0
+                  bg_color: 0x1B1F24
+                  scrollable: false
+                  widgets:
+                    - label:
+                        text: "\U000F02DC"
+                        text_font: mdi_28
+                        text_color: 0x2ECC71
+                        x: 18
+                        y: 28
+                    - label:
+                        text: "\U000F023A"
+                        text_font: mdi_28
+                        text_color: 0x5A646E
+                        x: 18
+                        y: 104
+                    - label:
+                        text: "\U000F0493"
+                        text_font: mdi_28
+                        text_color: 0x5A646E
+                        x: 18
+                        y: 180
+              # Kachel Licht
+              - button:
+                  id: btn_licht
+                  x: 76
+                  y: 16
+                  width: 190
+                  height: 84
+                  radius: 14
+                  bg_color: 0x23282E
+                  border_width: 2
+                  border_color: 0x23282E
+                  shadow_width: 0
+                  checked:
+                    border_color: 0x2ECC71
+                  on_click:
+                    - homeassistant.action:
+                        action: switch.toggle
+                        data:
+                          entity_id: switch.aqarium_aqarium_licht_aquarium_licht
+                  widgets:
+                    - label:
+                        text: "\U000F0335"
+                        text_font: mdi_28
+                        text_color: 0xFFE08A
+                        x: 6
+                        y: 18
+                    - label:
+                        text: "Licht"
+                        text_font: montserrat_14
+                        text_color: 0x8A949E
+                        x: 52
+                        y: 10
+                    - label:
+                        id: lbl_licht_state
+                        text: "Aus"
+                        text_font: montserrat_20
+                        text_color: 0x8A949E
+                        x: 52
+                        y: 34
+              # Kachel CO2
+              - button:
+                  id: btn_co2
+                  x: 278
+                  y: 16
+                  width: 190
+                  height: 84
+                  radius: 14
+                  bg_color: 0x23282E
+                  border_width: 2
+                  border_color: 0x23282E
+                  shadow_width: 0
+                  checked:
+                    border_color: 0x2ECC71
+                  on_click:
+                    - homeassistant.action:
+                        action: switch.toggle
+                        data:
+                          entity_id: switch.aqarium_co2_anlage
+                  widgets:
+                    - label:
+                        text: "\U000F07E4"
+                        text_font: mdi_28
+                        text_color: 0x7FD1F0
+                        x: 6
+                        y: 18
+                    - label:
+                        text: "CO2"
+                        text_font: montserrat_14
+                        text_color: 0x8A949E
+                        x: 52
+                        y: 10
+                    - label:
+                        id: lbl_co2_state
+                        text: "Aus"
+                        text_font: montserrat_20
+                        text_color: 0x8A949E
+                        x: 52
+                        y: 34
+              # Aquarium-Szene
+              - obj:
+                  x: 76
+                  y: 116
+                  width: 392
+                  height: 348
+                  radius: 16
+                  bg_color: 0x0B0E11
+                  border_width: 2
+                  border_color: 0x3A424A
+                  scrollable: false
+                  widgets:
+                    # Lampe
+                    - obj:
+                        id: lamp
+                        x: 10
+                        y: 8
+                        width: 368
+                        height: 12
+                        radius: 6
+                        border_width: 0
+                        bg_color: 0x4A525A
+                    # Wasser
+                    - obj:
+                        id: water
+                        x: 10
+                        y: 26
+                        width: 368
+                        height: 308
+                        radius: 8
+                        border_width: 0
+                        bg_color: 0x143A52
+                        scrollable: false
+                        widgets:
+                          # Sand
+                          - obj:
+                              x: 0
+                              y: 262
+                              width: 368
+                              height: 46
+                              radius: 8
+                              border_width: 0
+                              bg_color: 0xC9B27C
+                          # Pflanzen
+                          - obj: {x: 30, y: 160, width: 8, height: 110, radius: 4, border_width: 0, bg_color: 0x2E8B57}
+                          - obj: {x: 44, y: 190, width: 8, height: 80, radius: 4, border_width: 0, bg_color: 0x3CB371}
+                          - obj: {x: 58, y: 140, width: 8, height: 130, radius: 4, border_width: 0, bg_color: 0x2E8B57}
+                          - obj: {x: 300, y: 150, width: 8, height: 120, radius: 4, border_width: 0, bg_color: 0x3CB371}
+                          - obj: {x: 314, y: 190, width: 8, height: 80, radius: 4, border_width: 0, bg_color: 0x2E8B57}
+                          - obj: {x: 328, y: 170, width: 8, height: 100, radius: 4, border_width: 0, bg_color: 0x3CB371}
+                          # Garnele und Schnecke
+                          - obj: {x: 180, y: 248, width: 26, height: 14, radius: 7, border_width: 0, bg_color: 0xE8602C}
+                          - obj: {x: 110, y: 246, width: 18, height: 18, radius: 9, border_width: 0, bg_color: 0x8B5A2B}
+                          # CO2-Blasen
+                          - obj: {id: bub1, hidden: true, x: 270, y: 230, width: 10, height: 10, radius: 5, bg_color: 0xFFFFFF, bg_opa: 30%, border_width: 1, border_color: 0xFFFFFF}
+                          - obj: {id: bub2, hidden: true, x: 276, y: 180, width: 8, height: 8, radius: 4, bg_color: 0xFFFFFF, bg_opa: 30%, border_width: 1, border_color: 0xFFFFFF}
+                          - obj: {id: bub3, hidden: true, x: 268, y: 130, width: 12, height: 12, radius: 6, bg_color: 0xFFFFFF, bg_opa: 30%, border_width: 1, border_color: 0xFFFFFF}
+                          - obj: {id: bub4, hidden: true, x: 274, y: 80, width: 9, height: 9, radius: 4, bg_color: 0xFFFFFF, bg_opa: 30%, border_width: 1, border_color: 0xFFFFFF}

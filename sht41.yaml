@@ -34,6 +34,12 @@ i2c:
     scl: 17
     sda: 16
 
+# DS18B20 water temperature probe: data -> GPIO21 / D3 (4.7k pull-up to 3V3)
+one_wire:
+  - platform: gpio
+    pin: GPIO21
+    id: one_wire_bus
+
 sensor:
   - platform: sht4x
     id: sensor_sht41_1
@@ -44,3 +50,41 @@ sensor:
     temperature:
       name: Temperature
       id: sensor_sht41_1_temperature
+
+  - platform: dallas_temp
+    id: sensor_water_temperature
+    one_wire_id: one_wire_bus
+    name: Water Temperature
+    update_interval: 30s
+
+  # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0)
+  - platform: adc
+    id: sensor_tds_1_voltage
+    pin: GPIO0
+    name: TDS Voltage
+    attenuation: 12db
+    update_interval: 10s
+    accuracy_decimals: 3
+    unit_of_measurement: V
+    filters:
+      - median:
+          window_size: 7
+          send_every: 3
+
+  - platform: template
+    id: sensor_tds_1
+    name: TDS
+    unit_of_measurement: ppm
+    icon: mdi:water-opacity
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 30s
+    lambda: |-
+      float v = id(sensor_tds_1_voltage).state;
+      if (isnan(v)) return NAN;
+      // temperature compensation to 25 °C (uses water temperature, falls back to 25 °C)
+      float t = id(sensor_water_temperature).state;
+      if (isnan(t)) t = 25.0f;
+      float cv = v / (1.0f + 0.02f * (t - 25.0f));
+      float tds = (133.42f * cv * cv * cv - 255.86f * cv * cv + 857.39f * cv) * 0.5f;
+      return tds < 0 ? 0.0f : tds;

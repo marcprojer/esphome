@@ -1,6 +1,12 @@
 # Board: Seeed Studio XIAO ESP32C6 (Seeed Studio)
 # Definition: definitions/boards/seeed_xiao_esp32c6/manifest.yaml
 
+substitutions:
+  # TDS jump: change of the 5 min average vs. the 1 h average
+  tds_jump_threshold_pct: "10"
+  # water change recommended once TDS rose this much above the post-change baseline
+  tds_water_change_threshold_pct: "25"
+
 esphome:
   name: sht41
   friendly_name: SHT41
@@ -28,6 +34,79 @@ wifi:
     password: "MX0zKjfKwFcK"
 
 captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+globals:
+  # TDS after the last water change and the HA timestamp it belongs to (survive reboots)
+  - id: tds_baseline
+    type: float
+    restore_value: true
+    initial_value: "NAN"
+  - id: water_change_timestamp
+    type: uint32_t
+    restore_value: true
+    initial_value: "0"
+
+script:
+  # wait until the fresh water has mixed and settled before capturing the baseline
+  - id: script_capture_tds_baseline
+    mode: restart
+    then:
+      - delay: 30min
+      - lambda: |-
+          float tds = id(sensor_tds_1_avg_5min).state;
+          if (isnan(tds)) {
+            ESP_LOGW("tds", "Baseline not captured (no TDS value)");
+            return;
+          }
+          id(tds_baseline) = tds;
+          ESP_LOGI("tds", "Baseline captured: %.0f ppm", tds);
+      - component.update: sensor_tds_1_rise
+
+text_sensor:
+  # water changes are logged in HA (packages/aquarium_logbuch.yaml)
+  - platform: homeassistant
+    id: ha_water_change_time
+    entity_id: sensor.aquarium_wasserwechsel_zeitpunkt
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            // ISO 8601 with offset, e.g. 2026-10-14T13:00:00+02:00
+            int Y, M, D, h, m, s;
+            if (sscanf(x.c_str(), "%d-%d-%dT%d:%d:%d", &Y, &M, &D, &h, &m, &s) != 6) return;
+            int offset = 0;
+            size_t p = x.find_last_of("+-");
+            if (p != std::string::npos && p > 18) {
+              int oh = 0, om = 0;
+              sscanf(x.c_str() + p + 1, "%d:%d", &oh, &om);
+              offset = (x[p] == '-' ? -1 : 1) * (oh * 3600 + om * 60);
+            }
+            // days since 1970-01-01 (civil calendar)
+            int y = Y - (M <= 2);
+            int era = (y >= 0 ? y : y - 399) / 400;
+            int yoe = y - era * 400;
+            int doy = (153 * (M + (M > 2 ? -3 : 9)) + 2) / 5 + D - 1;
+            int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+            int64_t days = (int64_t) era * 146097 + doe - 719468;
+            uint32_t ts = days * 86400 + h * 3600 + m * 60 + s - offset;
+
+            // same entry again (HA restart, API reconnect) or an older one
+            if (ts <= id(water_change_timestamp)) return;
+            auto now = id(ha_time).now();
+            if (!now.is_valid()) return;
+            id(water_change_timestamp) = ts;
+            if (now.timestamp > ts + 86400) {
+              // logged long after the fact: the water is no longer fresh
+              id(tds_baseline) = NAN;
+              ESP_LOGW("tds", "Water change older than 24 h, baseline cleared");
+              return;
+            }
+            ESP_LOGI("tds", "Water change logged, capturing baseline in 30 min");
+            id(script_capture_tds_baseline).execute();
 
 i2c:
   - id: i2c_1
@@ -93,3 +172,53 @@ sensor:
       float cv = v / (1.0f + 0.02f * (t - 25.0f));
       float tds = (133.42f * cv * cv * cv - 255.86f * cv * cv + 857.39f * cv) * 0.5f;
       return tds < 0 ? 0.0f : tds;
+
+  - platform: copy
+    id: sensor_tds_1_avg_5min
+    source_id: sensor_tds_1
+    internal: true
+    filters:
+      - throttle_average: 5min
+
+  - platform: copy
+    id: sensor_tds_1_avg_1h
+    source_id: sensor_tds_1_avg_5min
+    internal: true
+    filters:
+      - sliding_window_moving_average:
+          window_size: 12
+          send_every: 1
+
+  - platform: template
+    id: sensor_tds_1_rise
+    name: TDS Rise Since Water Change
+    unit_of_measurement: "%"
+    icon: mdi:trending-up
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 15min
+    lambda: |-
+      float base = id(tds_baseline);
+      float tds = id(sensor_tds_1_avg_1h).state;
+      if (isnan(base) || base < 1.0f || isnan(tds)) return NAN;
+      return (tds - base) / base * 100.0f;
+
+binary_sensor:
+  # sudden change within ~1 h: dosing, medication, top-up, probe out of water, ...
+  - platform: template
+    name: TDS Jump
+    device_class: problem
+    lambda: |-
+      float a5 = id(sensor_tds_1_avg_5min).state;
+      float a60 = id(sensor_tds_1_avg_1h).state;
+      if (isnan(a5) || isnan(a60) || a60 < 20.0f) return false;
+      return fabsf(a5 - a60) / a60 * 100.0f > ${tds_jump_threshold_pct};
+    filters:
+      - delayed_off: 30min
+
+  - platform: template
+    name: Water Change Recommended
+    icon: mdi:fishbowl-outline
+    lambda: |-
+      float rise = id(sensor_tds_1_rise).state;
+      return !isnan(rise) && rise > ${tds_water_change_threshold_pct};

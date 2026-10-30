@@ -3,6 +3,7 @@ substitutions:
   light_entity: switch.aqarium_aqarium_licht_aquarium_licht
   co2_entity: switch.aqarium_co2_anlage
   pump_entity: switch.aquarium_stecker_aquariumpumpe_pwm
+  power_entity: sensor.aqarium_din_rail_3_leistung
   water_temp_entity: sensor.aquarium_aquarium_monitor_water_temperature
   tds_entity: sensor.aquarium_aquarium_monitor_tds
   tds_rise_entity: sensor.aquarium_aquarium_monitor_tds_rise_since_water_change
@@ -53,8 +54,22 @@ time:
         then:
           - script.execute: refresh_clock
 
+globals:
+  # water test entered on the tablet, not yet saved: pH, KH, NO2, NO3, NH4 ("" = not measured)
+  - id: pending
+    type: std::vector<std::string>
+    initial_value: std::vector<std::string>(5)
+  # subtitle per water tile ("zuletzt 12.10." / "neu"), incl. CO2
+  - id: wt_sub
+    type: std::vector<std::string>
+    initial_value: std::vector<std::string>(6)
+  # parameter currently open in the editor (index into pending)
+  - id: edit_param
+    type: int
+    initial_value: "0"
+
 # Colors: background 0x000000, tile 0x121212, text 0xFFFFFF / 0x8C8C8C / 0x5C5C5C,
-# accent 0x4FD1C5 (on), warning 0xF5A524, alert 0xFF5C5C
+# accent 0x4FD1C5 (on, new), warning 0xF5A524, alert 0xFF5C5C
 font:
   - file: "gfonts://Inter@400"
     id: inter_14
@@ -71,6 +86,11 @@ font:
     size: 22
     bpp: 4
     glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Inter@400"
+    id: inter_32
+    size: 32
+    bpp: 4
+    glyphs: "0123456789.,+-%"
   - file: "gfonts://Inter@300"
     id: inter_56
     size: 56
@@ -268,42 +288,47 @@ sensor:
     on_value:
       - script.execute: refresh_room
 
+  - platform: homeassistant
+    id: ha_power
+    entity_id: ${power_entity}
+    on_value:
+      - lvgl.label.update:
+          id: ov_power
+          text: !lambda |-
+            if (isnan(x)) return std::string("--");
+            return x < 10 ? str_sprintf("%.1f", x) : str_sprintf("%.0f", x);
+
   # manual water tests (packages/aquarium_wasserwerte.yaml)
   - platform: homeassistant
     id: ha_ph
     entity_id: sensor.aquarium_ph
     on_value:
-      - lvgl.label.update:
-          id: ov_ph
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.1f", x);
-
+      - script.execute: refresh_water
   - platform: homeassistant
     id: ha_kh
     entity_id: sensor.aquarium_kh
     on_value:
-      - lvgl.label.update:
-          id: ov_kh
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.0f", x);
-
+      - script.execute: refresh_water
   - platform: homeassistant
-    id: ha_co2_mgl
-    entity_id: sensor.aquarium_co2
+    id: ha_no2
+    entity_id: sensor.aquarium_no2
     on_value:
-      - lvgl.label.update:
-          id: ov_co2_mgl
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.0f", x);
-
+      - script.execute: refresh_water
   - platform: homeassistant
     id: ha_no3
     entity_id: sensor.aquarium_no3
     on_value:
-      - lvgl.label.update:
-          id: ov_no3
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.0f", x);
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_nh4
+    entity_id: sensor.aquarium_nh4
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_co2_mgl
+    entity_id: sensor.aquarium_co2
+    on_value:
+      - script.execute: refresh_water
 
   - platform: homeassistant
     id: ha_out_of_range_count
@@ -324,7 +349,45 @@ text_sensor:
     entity_id: sensor.aquarium_wasserwerte_status
     attribute: ausser_soll
     on_value:
-      - script.execute: refresh_value_colors
+      - script.execute: refresh_water
+
+  # date of the last test per value, e.g. "2026-10-12 10:44:57"
+  - platform: homeassistant
+    id: ha_ph_date
+    entity_id: sensor.aquarium_ph
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_kh_date
+    entity_id: sensor.aquarium_kh
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_no2_date
+    entity_id: sensor.aquarium_no2
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_no3_date
+    entity_id: sensor.aquarium_no3
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_nh4_date
+    entity_id: sensor.aquarium_nh4
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha_co2_date
+    entity_id: sensor.aquarium_co2
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
 
 # ---------------------------------------------------------------------------
 # UI refresh
@@ -385,25 +448,6 @@ script:
           text_color: !lambda |-
             return id(ha_tds_high).state ? lv_color_hex(0xF5A524) : lv_color_hex(0x8C8C8C);
 
-  - id: refresh_value_colors
-    then:
-      - lvgl.label.update:
-          id: ov_ph
-          text_color: !lambda |-
-            return id(ha_out_of_range).state.find("ph") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
-      - lvgl.label.update:
-          id: ov_kh
-          text_color: !lambda |-
-            return id(ha_out_of_range).state.find("kh") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
-      - lvgl.label.update:
-          id: ov_co2_mgl
-          text_color: !lambda |-
-            return id(ha_out_of_range).state.find("co2") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
-      - lvgl.label.update:
-          id: ov_no3
-          text_color: !lambda |-
-            return id(ha_out_of_range).state.find("no3") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
-
   - id: refresh_water_change
     then:
       - lvgl.label.update:
@@ -420,22 +464,213 @@ script:
             float d = id(ha_water_change_due).state;
             return (!isnan(d) && d <= 0) ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
 
+  # Wasser tab: new (unsaved) value in accent, else last test (amber if out of range)
+  - id: refresh_water
+    then:
+      - lvgl.label.update:
+          id: wt_ph_val
+          text: !lambda |-
+            if (!id(pending)[0].empty()) return id(pending)[0];
+            float v = id(ha_ph).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%.1f", v);
+          text_color: !lambda |-
+            if (!id(pending)[0].empty()) return lv_color_hex(0x4FD1C5);
+            return id(ha_out_of_range).state.find("ph") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: wt_kh_val
+          text: !lambda |-
+            if (!id(pending)[1].empty()) return id(pending)[1];
+            float v = id(ha_kh).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%g", v);
+          text_color: !lambda |-
+            if (!id(pending)[1].empty()) return lv_color_hex(0x4FD1C5);
+            return id(ha_out_of_range).state.find("kh") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: wt_no2_val
+          text: !lambda |-
+            if (!id(pending)[2].empty()) return id(pending)[2];
+            float v = id(ha_no2).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%g", v);
+          text_color: !lambda |-
+            if (!id(pending)[2].empty()) return lv_color_hex(0x4FD1C5);
+            return id(ha_out_of_range).state.find("no2") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: wt_no3_val
+          text: !lambda |-
+            if (!id(pending)[3].empty()) return id(pending)[3];
+            float v = id(ha_no3).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%g", v);
+          text_color: !lambda |-
+            if (!id(pending)[3].empty()) return lv_color_hex(0x4FD1C5);
+            return id(ha_out_of_range).state.find("no3") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: wt_nh4_val
+          text: !lambda |-
+            if (!id(pending)[4].empty()) return id(pending)[4];
+            float v = id(ha_nh4).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%g", v);
+          text_color: !lambda |-
+            if (!id(pending)[4].empty()) return lv_color_hex(0x4FD1C5);
+            return id(ha_out_of_range).state.find("nh4") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: wt_co2_val
+          text: !lambda |-
+            float v = id(ha_co2_mgl).state;
+            return isnan(v) ? std::string("--") : str_sprintf("%.0f", v);
+          text_color: !lambda |-
+            return id(ha_out_of_range).state.find("co2") != std::string::npos ? lv_color_hex(0xF5A524) : lv_color_hex(0xFFFFFF);
+      # "zuletzt 12.10." or "neu"
+      - lambda: |-
+          auto sub = [](const std::string &pend, const std::string &date) -> std::string {
+            if (!pend.empty()) return "neu";
+            if (date.size() < 10) return "noch nie";
+            return "zuletzt " + date.substr(8, 2) + "." + date.substr(5, 2) + ".";
+          };
+          id(wt_sub)[0] = sub(id(pending)[0], id(ha_ph_date).state);
+          id(wt_sub)[1] = sub(id(pending)[1], id(ha_kh_date).state);
+          id(wt_sub)[2] = sub(id(pending)[2], id(ha_no2_date).state);
+          id(wt_sub)[3] = sub(id(pending)[3], id(ha_no3_date).state);
+          id(wt_sub)[4] = sub(id(pending)[4], id(ha_nh4_date).state);
+          id(wt_sub)[5] = sub("", id(ha_co2_date).state);
+      - lvgl.label.update: {id: wt_ph_sub, text: !lambda "return id(wt_sub)[0];"}
+      - lvgl.label.update: {id: wt_kh_sub, text: !lambda "return id(wt_sub)[1];"}
+      - lvgl.label.update: {id: wt_no2_sub, text: !lambda "return id(wt_sub)[2];"}
+      - lvgl.label.update: {id: wt_no3_sub, text: !lambda "return id(wt_sub)[3];"}
+      - lvgl.label.update: {id: wt_nh4_sub, text: !lambda "return id(wt_sub)[4];"}
+      - lvgl.label.update: {id: wt_co2_sub, text: !lambda "return id(wt_sub)[5];"}
+      # save button
+      - if:
+          condition:
+            lambda: |-
+              for (auto &p : id(pending)) if (!p.empty()) return true;
+              return false;
+          then:
+            - lvgl.widget.update: {id: wt_save, bg_color: 0x4FD1C5}
+            - lvgl.label.update:
+                id: wt_save_label
+                text_color: 0x000000
+                text: !lambda |-
+                  int n = 0;
+                  for (auto &p : id(pending)) if (!p.empty()) n++;
+                  return n == 1 ? std::string("1 Wert speichern") : str_sprintf("%d Werte speichern", n);
+          else:
+            - lvgl.widget.update: {id: wt_save, bg_color: 0x121212}
+            - lvgl.label.update: {id: wt_save_label, text: "Wert antippen zum Erfassen", text_color: 0x5C5C5C}
+
+  # open the value picker for one parameter (0 pH, 1 KH, 2 NO2, 3 NO3, 4 NH4)
+  # Roller steps follow the JBL ProAquaTest colour charts; adjust to your kit.
+  - id: open_editor
+    parameters:
+      p: int
+    then:
+      - lambda: id(edit_param) = p;
+      - if:
+          condition:
+            lambda: return p == 0;
+          then:
+            - lvgl.label.update: {id: ed_title, text: "pH"}
+            - lvgl.roller.update:
+                id: ed_roller
+                options: ["6.0", "6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "6.7", "6.8", "6.9",
+                          "7.0", "7.1", "7.2", "7.3", "7.4", "7.5", "7.6", "7.7", "7.8", "7.9",
+                          "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"]
+      - if:
+          condition:
+            lambda: return p == 1;
+          then:
+            - lvgl.label.update: {id: ed_title, text: "KH in °dH (Tropfen)"}
+            - lvgl.roller.update:
+                id: ed_roller
+                options: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+                          "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
+      - if:
+          condition:
+            lambda: return p == 2;
+          then:
+            - lvgl.label.update: {id: ed_title, text: "Nitrit NO2 in mg/l"}
+            - lvgl.roller.update:
+                id: ed_roller
+                options: ["0", "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1"]
+      - if:
+          condition:
+            lambda: return p == 3;
+          then:
+            - lvgl.label.update: {id: ed_title, text: "Nitrat NO3 in mg/l"}
+            - lvgl.roller.update:
+                id: ed_roller
+                options: ["0", "0.5", "1", "5", "10", "20", "40", "80", "120", "240"]
+      - if:
+          condition:
+            lambda: return p == 4;
+          then:
+            - lvgl.label.update: {id: ed_title, text: "Ammonium NH4 in mg/l"}
+            - lvgl.roller.update:
+                id: ed_roller
+                options: ["0", "0.05", "0.1", "0.2", "0.4", "0.6", "1", "1.5", "2.5", "5"]
+      # start at the new value if one was picked, else at the last test, else at a typical value
+      - lambda: |-
+          static const int fallback[] = {10, 6, 0, 4, 0};
+          sensor::Sensor *last[] = {id(ha_ph), id(ha_kh), id(ha_no2), id(ha_no3), id(ha_nh4)};
+          float target = id(pending)[p].empty() ? last[p]->state : atof(id(pending)[p].c_str());
+          auto *roller = id(ed_roller);
+          const auto &opts = roller->get_options();
+          size_t best = fallback[p];
+          if (!isnan(target)) {
+            float diff = INFINITY;
+            for (size_t i = 0; i < opts.size(); i++) {
+              float d = fabsf(atof(opts[i]) - target);
+              if (d < diff) { diff = d; best = i; }
+            }
+          }
+          roller->set_selected_index(best, LV_ANIM_OFF);
+      - lvgl.widget.show: ed_overlay
+
+  - id: save_water_test
+    then:
+      - homeassistant.action:
+          action: script.aquarium_wasserwerte_vom_tablet
+          data:
+            ph: !lambda return id(pending)[0];
+            kh: !lambda return id(pending)[1];
+            no2: !lambda return id(pending)[2];
+            no3: !lambda return id(pending)[3];
+            nh4: !lambda return id(pending)[4];
+      - lambda: |-
+          for (auto &p : id(pending)) p.clear();
+      - lvgl.widget.update: {id: wt_save, bg_color: 0x121212}
+      - lvgl.label.update: {id: wt_save_label, text: "Gespeichert", text_color: 0x4FD1C5}
+      - delay: 3s
+      - script.execute: refresh_water
+
   - id: show_overview
     then:
+      - lvgl.widget.hide: ed_overlay
       - lvgl.page.show: page_overview
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
+      - lvgl.label.update: {id: hdr_tab_water, text_color: 0x5C5C5C}
       - lvgl.widget.update: {id: hdr_underline, x: 16}
 
   - id: show_control
     then:
+      - lvgl.widget.hide: ed_overlay
       - lvgl.page.show: page_control
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
-      - lvgl.widget.update: {id: hdr_underline, x: 136}
+      - lvgl.label.update: {id: hdr_tab_water, text_color: 0x5C5C5C}
+      - lvgl.widget.update: {id: hdr_underline, x: 124}
+
+  - id: show_water
+    then:
+      - lvgl.widget.hide: ed_overlay
+      - lvgl.page.show: page_water
+      - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
+      - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
+      - lvgl.label.update: {id: hdr_tab_water, text_color: 0xFFFFFF}
+      - lvgl.widget.update: {id: hdr_underline, x: 236}
 
 # ---------------------------------------------------------------------------
-# UI: dark, black/white, accent only for "on" and warnings
+# UI: dark, black/white, accent only for "on", "new" and warnings
 # ---------------------------------------------------------------------------
 lvgl:
   displays:
@@ -476,7 +711,7 @@ lvgl:
             - button:
                 x: 0
                 y: 0
-                width: 124
+                width: 112
                 height: 56
                 bg_opa: TRANSP
                 pressed:
@@ -484,16 +719,11 @@ lvgl:
                 on_click:
                   - script.execute: show_overview
                 widgets:
-                  - label:
-                      id: hdr_tab_overview
-                      x: 16
-                      y: 18
-                      text: "Übersicht"
-                      text_color: 0xFFFFFF
+                  - label: {id: hdr_tab_overview, x: 16, y: 18, text: "Übersicht", text_color: 0xFFFFFF}
             - button:
-                x: 124
+                x: 112
                 y: 0
-                width: 124
+                width: 112
                 height: 56
                 bg_opa: TRANSP
                 pressed:
@@ -501,12 +731,19 @@ lvgl:
                 on_click:
                   - script.execute: show_control
                 widgets:
-                  - label:
-                      id: hdr_tab_control
-                      x: 12
-                      y: 18
-                      text: "Steuerung"
-                      text_color: 0x5C5C5C
+                  - label: {id: hdr_tab_control, x: 12, y: 18, text: "Steuerung", text_color: 0x5C5C5C}
+            - button:
+                x: 224
+                y: 0
+                width: 96
+                height: 56
+                bg_opa: TRANSP
+                pressed:
+                  bg_opa: TRANSP
+                on_click:
+                  - script.execute: show_water
+                widgets:
+                  - label: {id: hdr_tab_water, x: 12, y: 18, text: "Wasser", text_color: 0x5C5C5C}
             - obj:
                 id: hdr_underline
                 x: 16
@@ -524,7 +761,7 @@ lvgl:
                 text_color: 0x8C8C8C
 
   pages:
-    # ---------------------------------------------------------------- Seite 1
+    # ---------------------------------------------------------------- Übersicht
     - id: page_overview
       bg_color: 0x000000
       scrollable: false
@@ -536,31 +773,10 @@ lvgl:
             width: 216
             height: 150
             widgets:
-              - label:
-                  x: 18
-                  y: 16
-                  text: "WASSER"
-                  text_font: inter_14
-                  text_color: 0x8C8C8C
-              - label:
-                  id: ov_water_temp
-                  x: 14
-                  y: 40
-                  text: "--"
-                  text_font: inter_56
-              - label:
-                  x: 150
-                  y: 52
-                  text: "°C"
-                  text_font: inter_18
-                  text_color: 0x8C8C8C
-              - label:
-                  id: ov_room
-                  x: 18
-                  y: 118
-                  text: "Raum --"
-                  text_font: inter_14
-                  text_color: 0x8C8C8C
+              - label: {x: 18, y: 16, text: "WASSER", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: ov_water_temp, x: 14, y: 40, text: "--", text_font: inter_56}
+              - label: {x: 150, y: 52, text: "°C", text_font: inter_18, text_color: 0x8C8C8C}
+              - label: {id: ov_room, x: 18, y: 118, text: "Raum --", text_font: inter_14, text_color: 0x8C8C8C}
 
         # TDS
         - obj:
@@ -569,31 +785,10 @@ lvgl:
             width: 216
             height: 150
             widgets:
-              - label:
-                  x: 18
-                  y: 16
-                  text: "TDS"
-                  text_font: inter_14
-                  text_color: 0x8C8C8C
-              - label:
-                  id: ov_tds
-                  x: 14
-                  y: 40
-                  text: "--"
-                  text_font: inter_56
-              - label:
-                  x: 150
-                  y: 52
-                  text: "ppm"
-                  text_font: inter_18
-                  text_color: 0x8C8C8C
-              - label:
-                  id: ov_tds_rise
-                  x: 18
-                  y: 118
-                  text: "Seit Wasserwechsel: --"
-                  text_font: inter_14
-                  text_color: 0x8C8C8C
+              - label: {x: 18, y: 16, text: "TDS", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: ov_tds, x: 14, y: 40, text: "--", text_font: inter_56}
+              - label: {x: 150, y: 52, text: "ppm", text_font: inter_18, text_color: 0x8C8C8C}
+              - label: {id: ov_tds_rise, x: 18, y: 118, text: "Seit Wasserwechsel: --", text_font: inter_14, text_color: 0x8C8C8C}
 
         # Geräte (nur Anzeige, Tippen öffnet die Steuerung)
         - button:
@@ -630,39 +825,16 @@ lvgl:
               - label: {x: 50, y: 13, text: "Pumpe", text_font: inter_14}
               - label: {id: ov_pump_state, x: 50, y: 33, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
 
-        # Letzte Wassertests (gelb = ausserhalb Soll)
+        # Leistung
         - obj:
             x: 16
             y: 306
-            width: 103
+            width: 448
             height: 80
             widgets:
-              - label: {x: 14, y: 12, text: "pH", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: ov_ph, x: 14, y: 38, text: "--", text_font: inter_22}
-        - obj:
-            x: 131
-            y: 306
-            width: 103
-            height: 80
-            widgets:
-              - label: {x: 14, y: 12, text: "KH °dH", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: ov_kh, x: 14, y: 38, text: "--", text_font: inter_22}
-        - obj:
-            x: 246
-            y: 306
-            width: 103
-            height: 80
-            widgets:
-              - label: {x: 14, y: 12, text: "CO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: ov_co2_mgl, x: 14, y: 38, text: "--", text_font: inter_22}
-        - obj:
-            x: 361
-            y: 306
-            width: 103
-            height: 80
-            widgets:
-              - label: {x: 14, y: 12, text: "NO3 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: ov_no3, x: 14, y: 38, text: "--", text_font: inter_22}
+              - label: {x: 18, y: 14, text: "LEISTUNG", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: ov_power, x: 18, y: 34, text: "--", text_font: inter_32}
+              - label: {x: 120, y: 45, text: "W", text_font: inter_18, text_color: 0x8C8C8C}
 
         # Status
         - obj:
@@ -684,7 +856,7 @@ lvgl:
               - label: {x: 16, y: 12, text: "Wasserwechsel", text_font: inter_14, text_color: 0x8C8C8C}
               - label: {id: ov_ww, x: 16, y: 34, width: 140, long_mode: DOT, text: "--"}
 
-    # ---------------------------------------------------------------- Seite 2
+    # ---------------------------------------------------------------- Steuerung
     - id: page_control
       bg_color: 0x000000
       scrollable: false
@@ -829,3 +1001,163 @@ lvgl:
                     - light.turn_on:
                         id: backlight
                         brightness: !lambda return x / 100.0f;
+
+    # ---------------------------------------------------------------- Wasser
+    - id: page_water
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        # Werte: Tippen öffnet die Auswahl (CO2 wird in HA aus pH/KH berechnet)
+        - button:
+            x: 16
+            y: 68
+            width: 141
+            height: 120
+            on_click:
+              - script.execute: {id: open_editor, p: 0}
+            widgets:
+              - label: {x: 14, y: 12, text: "pH", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_ph_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_ph_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        - button:
+            x: 169
+            y: 68
+            width: 141
+            height: 120
+            on_click:
+              - script.execute: {id: open_editor, p: 1}
+            widgets:
+              - label: {x: 14, y: 12, text: "KH °dH", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_kh_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_kh_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        - button:
+            x: 322
+            y: 68
+            width: 142
+            height: 120
+            on_click:
+              - script.execute: {id: open_editor, p: 2}
+            widgets:
+              - label: {x: 14, y: 12, text: "NO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_no2_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_no2_sub, x: 14, y: 92, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        - button:
+            x: 16
+            y: 200
+            width: 141
+            height: 120
+            on_click:
+              - script.execute: {id: open_editor, p: 3}
+            widgets:
+              - label: {x: 14, y: 12, text: "NO3 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_no3_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_no3_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        - button:
+            x: 169
+            y: 200
+            width: 141
+            height: 120
+            on_click:
+              - script.execute: {id: open_editor, p: 4}
+            widgets:
+              - label: {x: 14, y: 12, text: "NH4 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_nh4_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_nh4_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        - obj:
+            x: 322
+            y: 200
+            width: 142
+            height: 120
+            widgets:
+              - label: {x: 14, y: 12, text: "CO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: wt_co2_val, x: 14, y: 38, text: "--", text_font: inter_32}
+              - label: {id: wt_co2_sub, x: 14, y: 92, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+
+        - label:
+            x: 16
+            y: 340
+            width: 448
+            text: "Gelb = ausserhalb Soll. CO2 berechnet HA aus pH und KH."
+            text_font: inter_14
+            text_color: 0x5C5C5C
+
+        - button:
+            id: wt_save
+            x: 16
+            y: 380
+            width: 448
+            height: 88
+            on_click:
+              - if:
+                  condition:
+                    lambda: |-
+                      for (auto &p : id(pending)) if (!p.empty()) return true;
+                      return false;
+                  then:
+                    - script.execute: save_water_test
+            widgets:
+              - label: {id: wt_save_label, align: CENTER, text: "Wert antippen zum Erfassen", text_font: inter_22, text_color: 0x5C5C5C}
+
+        # Auswahl eines Werts (über der Seite, unter der Kopfzeile)
+        - obj:
+            id: ed_overlay
+            hidden: true
+            x: 0
+            y: 56
+            width: 480
+            height: 424
+            radius: 0
+            bg_color: 0x000000
+            widgets:
+              - label: {id: ed_title, x: 24, y: 14, text: "", text_font: inter_22}
+              - roller:
+                  id: ed_roller
+                  x: 90
+                  y: 52
+                  width: 300
+                  height: 260
+                  visible_row_count: 5
+                  text_font: inter_32
+                  text_align: CENTER
+                  text_color: 0x5C5C5C
+                  bg_color: 0x121212
+                  border_width: 0
+                  radius: 16
+                  selected:
+                    bg_color: 0x1E1E1E
+                    text_color: 0x4FD1C5
+                  options: ["6.0", "7.0", "8.0"]
+              - button:
+                  x: 16
+                  y: 332
+                  width: 140
+                  height: 76
+                  on_click:
+                    - lambda: id(pending)[id(edit_param)].clear();
+                    - lvgl.widget.hide: ed_overlay
+                    - script.execute: refresh_water
+                  widgets:
+                    - label: {align: CENTER, text: "Leeren", text_color: 0x8C8C8C}
+              - button:
+                  x: 170
+                  y: 332
+                  width: 140
+                  height: 76
+                  on_click:
+                    - lvgl.widget.hide: ed_overlay
+                  widgets:
+                    - label: {align: CENTER, text: "Abbrechen", text_color: 0x8C8C8C}
+              - button:
+                  x: 324
+                  y: 332
+                  width: 140
+                  height: 76
+                  bg_color: 0x4FD1C5
+                  pressed:
+                    bg_color: 0x3BA89E
+                  on_click:
+                    - lambda: id(pending)[id(edit_param)] = id(ed_roller)->get_selected_text();
+                    - lvgl.widget.hide: ed_overlay
+                    - script.execute: refresh_water
+                  widgets:
+                    - label: {align: CENTER, text: "Übernehmen", text_color: 0x000000}

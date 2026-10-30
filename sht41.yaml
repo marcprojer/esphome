@@ -56,6 +56,11 @@ sensor:
     one_wire_id: one_wire_bus
     name: Water Temperature
     update_interval: 30s
+    # calibrated 2026-10-30: ice bath and boiling water (Zurich ~410 m -> 98.6 °C)
+    filters:
+      - calibrate_linear:
+          - -2.9 -> 0.0
+          - 95.3 -> 98.6
 
   # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0)
   - platform: adc

@@ -139,28 +139,19 @@ light:
     id: backlight
     restore_mode: ALWAYS_ON
 
+# Board preset: pins, pclk polarity, 18 bit mode and panel init for the 4848S040.
+# The generic ST7701S preset (480x864 panel) caused a blurry, shimmering picture.
 display:
   - platform: mipi_rgb
-    model: ST7701S
+    model: GUITION-4848S040
     id: tft
     update_interval: never
     auto_clear_enabled: false
     spi_id: lcd_spi
-    cs_pin: GPIO39
-    dimensions:
-      width: 480
-      height: 480
-    de_pin: GPIO18
-    hsync_pin: GPIO16
-    vsync_pin: GPIO17
-    pclk_pin: GPIO21
-    pclk_frequency: 12MHz
-    color_order: RGB
-    invert_colors: false
-    data_pins:
-      red: [GPIO11, GPIO12, GPIO13, GPIO14, GPIO0]
-      green: [GPIO8, GPIO20, GPIO3, GPIO46, GPIO9, GPIO10]
-      blue: [GPIO4, GPIO5, GPIO6, GPIO7, GPIO15]
+    # keep the orientation of the previous setup (preset default is mirrored)
+    transform:
+      mirror_x: false
+      mirror_y: false
 
 touchscreen:
   - platform: gt911

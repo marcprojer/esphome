@@ -123,6 +123,13 @@ globals:
   - id: is_night
     type: bool
     initial_value: "false"
+  # water change amount picked on the tablet; follows the last logged change until touched
+  - id: ww_percent
+    type: int
+    initial_value: "20"
+  - id: ww_touched
+    type: bool
+    initial_value: "false"
   # days until the next dose (INT_MIN = unknown)
   - id: dose_days
     type: int
@@ -437,8 +444,30 @@ sensor:
     entity_id: sensor.aquarium_wasserwechsel_faellig
     on_value:
       - script.execute: refresh_water_change
+      - script.execute: refresh_ww
+  - platform: homeassistant
+    id: ha_last_ww
+    entity_id: sensor.aquarium_letzter_wasserwechsel
+    on_value:
+      - lambda: |-
+          if (!id(ww_touched) && !isnan(x) && x > 0)
+            id(ww_percent) = std::min(100, std::max(5, (int) roundf(x / 5.0f) * 5));
+      - script.execute: refresh_ww
+  - platform: homeassistant
+    id: ha_volume
+    entity_id: input_number.aq_systemvolumen
+    on_value:
+      - script.execute: refresh_ww
 
 text_sensor:
+  # e.g. "2026-10-14 13:00:00"
+  - platform: homeassistant
+    id: ha_last_ww_time
+    entity_id: sensor.aquarium_letzter_wasserwechsel
+    attribute: zeitpunkt
+    on_value:
+      - script.execute: refresh_ww
+
   # next dose from the logbook (packages/aquarium_logbuch.yaml), e.g. 2026-11-02T12:00:00+01:00
   - platform: homeassistant
     id: ha_next_dose
@@ -793,6 +822,93 @@ script:
       - lvgl.label.update: {id: wt_save_label, text: "Gespeichert", text_color: 0xD9A920}
       - delay: 3s
       - script.execute: refresh_water
+
+  # Wasser tab, sub view "Wasserwechsel"
+  - id: refresh_ww
+    then:
+      - lvgl.label.update:
+          id: ww_val
+          text: !lambda return to_string(id(ww_percent));
+      - lvgl.label.update:
+          id: ww_liters
+          text: !lambda |-
+            float vol = id(ha_volume).state;
+            if (isnan(vol) || vol <= 0) return std::string("");
+            return str_sprintf("= %.1f L von %.0f L", id(ww_percent) / 100.0f * vol, vol);
+      - lvgl.widget.update:
+          id: [ww_chip_10, ww_chip_20, ww_chip_25, ww_chip_30, ww_chip_40, ww_chip_50]
+          bg_color: 0x121212
+      - lvgl.label.update:
+          id: [ww_chip_10_label, ww_chip_20_label, ww_chip_25_label, ww_chip_30_label, ww_chip_40_label, ww_chip_50_label]
+          text_color: 0xFFFFFF
+      - lambda: |-
+          // highlight the preset matching the current amount
+          struct Chip { int pct; lv_obj_t *btn; lv_obj_t *lbl; };
+          const Chip chips[] = {
+            {10, id(ww_chip_10), id(ww_chip_10_label)}, {20, id(ww_chip_20), id(ww_chip_20_label)},
+            {25, id(ww_chip_25), id(ww_chip_25_label)}, {30, id(ww_chip_30), id(ww_chip_30_label)},
+            {40, id(ww_chip_40), id(ww_chip_40_label)}, {50, id(ww_chip_50), id(ww_chip_50_label)},
+          };
+          for (auto &c : chips) {
+            if (c.pct != id(ww_percent)) continue;
+            lv_obj_set_style_bg_color(c.btn, lv_color_hex(0xD9A920), LV_PART_MAIN);
+            lv_obj_set_style_text_color(c.lbl, lv_color_hex(0x000000), LV_PART_MAIN);
+          }
+      - lvgl.label.update:
+          id: ww_last
+          text: !lambda |-
+            auto &t = id(ha_last_ww_time).state;
+            float pct = id(ha_last_ww).state;
+            if (t.size() < 10 || isnan(pct)) return std::string("Letzter: noch keiner erfasst");
+            return "Letzter: " + t.substr(8, 2) + "." + t.substr(5, 2) + "." + t.substr(0, 4) +
+                   str_sprintf(" mit %.0f %%", pct);
+      - lvgl.label.update:
+          id: ww_next
+          text: !lambda |-
+            float d = id(ha_water_change_due).state;
+            if (isnan(d)) return std::string("Nächster: --");
+            int n = (int) d;
+            if (n > 1) return str_sprintf("Nächster: in %d Tagen", n);
+            if (n == 1) return std::string("Nächster: morgen");
+            if (n == 0) return std::string("Nächster: heute");
+            return str_sprintf("Nächster: seit %d %s fällig", -n, n == -1 ? "Tag" : "Tagen");
+          text_color: !lambda |-
+            float d = id(ha_water_change_due).state;
+            return (!isnan(d) && d <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
+      - lvgl.label.update:
+          id: ww_save_label
+          text: !lambda return str_sprintf("%d %% Wasserwechsel speichern", id(ww_percent));
+
+  - id: save_water_change
+    mode: single
+    then:
+      - homeassistant.action:
+          action: script.aquarium_wasserwechsel_vom_tablet
+          data:
+            prozent: !lambda return to_string(id(ww_percent));
+      - lambda: id(ww_touched) = false;
+      - lvgl.label.update: {id: ww_save_label, text: "Gespeichert"}
+      - delay: 3s
+      - script.execute: refresh_ww
+
+  - id: show_water_values
+    then:
+      - lvgl.widget.hide: ww_view
+      - lvgl.widget.show: wt_values_view
+      - lvgl.widget.update: {id: wt_seg_values, bg_color: 0x2A2A2A}
+      - lvgl.widget.update: {id: wt_seg_change, bg_color: 0x121212}
+      - lvgl.label.update: {id: wt_seg_values_label, text_color: 0xFFFFFF}
+      - lvgl.label.update: {id: wt_seg_change_label, text_color: 0x8C8C8C}
+
+  - id: show_water_change
+    then:
+      - lvgl.widget.hide: wt_values_view
+      - lvgl.widget.show: ww_view
+      - lvgl.widget.update: {id: wt_seg_values, bg_color: 0x121212}
+      - lvgl.widget.update: {id: wt_seg_change, bg_color: 0x2A2A2A}
+      - lvgl.label.update: {id: wt_seg_values_label, text_color: 0x8C8C8C}
+      - lvgl.label.update: {id: wt_seg_change_label, text_color: 0xFFFFFF}
+      - script.execute: refresh_ww
 
   - id: show_overview
     then:
@@ -1181,96 +1297,291 @@ lvgl:
       bg_color: 0x000000
       scrollable: false
       widgets:
-        # Werte: Tippen öffnet die Auswahl (CO2 wird in HA aus pH/KH berechnet)
-        - button:
-            x: 16
-            y: 68
-            width: 141
-            height: 120
-            on_click:
-              - script.execute: {id: open_editor, p: 0}
-            widgets:
-              - label: {x: 14, y: 12, text: "pH", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_ph_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_ph_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
-        - button:
-            x: 169
-            y: 68
-            width: 141
-            height: 120
-            on_click:
-              - script.execute: {id: open_editor, p: 1}
-            widgets:
-              - label: {x: 14, y: 12, text: "KH °dH", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_kh_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_kh_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
-        - button:
-            x: 322
-            y: 68
-            width: 142
-            height: 120
-            on_click:
-              - script.execute: {id: open_editor, p: 2}
-            widgets:
-              - label: {x: 14, y: 12, text: "NO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_no2_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_no2_sub, x: 14, y: 92, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
-        - button:
-            x: 16
-            y: 200
-            width: 141
-            height: 120
-            on_click:
-              - script.execute: {id: open_editor, p: 3}
-            widgets:
-              - label: {x: 14, y: 12, text: "NO3 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_no3_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_no3_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
-        - button:
-            x: 169
-            y: 200
-            width: 141
-            height: 120
-            on_click:
-              - script.execute: {id: open_editor, p: 4}
-            widgets:
-              - label: {x: 14, y: 12, text: "NH4 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_nh4_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_nh4_sub, x: 14, y: 92, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+        # Unter-Tabs: Werte | Wasserwechsel
         - obj:
-            x: 322
-            y: 200
-            width: 142
-            height: 120
-            widgets:
-              - label: {x: 14, y: 12, text: "CO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
-              - label: {id: wt_co2_val, x: 14, y: 38, text: "--", text_font: inter_32}
-              - label: {id: wt_co2_sub, x: 14, y: 92, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
-
-        - label:
             x: 16
-            y: 340
+            y: 64
             width: 448
-            text: "Orange = ausserhalb Soll. CO2 berechnet HA aus pH und KH."
-            text_font: inter_14
-            text_color: 0x5C5C5C
-
-        - button:
-            id: wt_save
-            x: 16
-            y: 380
-            width: 448
-            height: 88
-            on_click:
-              - if:
-                  condition:
-                    lambda: |-
-                      for (auto &p : id(pending)) if (!p.empty()) return true;
-                      return false;
-                  then:
-                    - script.execute: save_water_test
+            height: 40
+            radius: 20
             widgets:
-              - label: {id: wt_save_label, align: CENTER, text: "Wert antippen zum Erfassen", text_font: inter_22, text_color: 0x5C5C5C}
+              - button:
+                  id: wt_seg_values
+                  x: 4
+                  y: 4
+                  width: 218
+                  height: 32
+                  radius: 16
+                  bg_color: 0x2A2A2A
+                  on_click:
+                    - script.execute: show_water_values
+                  widgets:
+                    - label: {id: wt_seg_values_label, align: CENTER, text: "Werte", text_font: inter_14}
+              - button:
+                  id: wt_seg_change
+                  x: 226
+                  y: 4
+                  width: 218
+                  height: 32
+                  radius: 16
+                  on_click:
+                    - script.execute: show_water_change
+                  widgets:
+                    - label: {id: wt_seg_change_label, align: CENTER, text: "Wasserwechsel", text_font: inter_14, text_color: 0x8C8C8C}
+
+        # -------- Werte: Tippen öffnet die Auswahl (CO2 wird in HA aus pH/KH berechnet)
+        - obj:
+            id: wt_values_view
+            x: 0
+            y: 112
+            width: 480
+            height: 368
+            radius: 0
+            bg_opa: TRANSP
+            widgets:
+              - button:
+                  x: 16
+                  y: 0
+                  width: 141
+                  height: 112
+                  on_click:
+                    - script.execute: {id: open_editor, p: 0}
+                  widgets:
+                    - label: {x: 14, y: 12, text: "pH", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_ph_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_ph_sub, x: 14, y: 84, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+              - button:
+                  x: 169
+                  y: 0
+                  width: 141
+                  height: 112
+                  on_click:
+                    - script.execute: {id: open_editor, p: 1}
+                  widgets:
+                    - label: {x: 14, y: 12, text: "KH °dH", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_kh_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_kh_sub, x: 14, y: 84, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+              - button:
+                  x: 322
+                  y: 0
+                  width: 142
+                  height: 112
+                  on_click:
+                    - script.execute: {id: open_editor, p: 2}
+                  widgets:
+                    - label: {x: 14, y: 12, text: "NO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_no2_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_no2_sub, x: 14, y: 84, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+              - button:
+                  x: 16
+                  y: 120
+                  width: 141
+                  height: 112
+                  on_click:
+                    - script.execute: {id: open_editor, p: 3}
+                  widgets:
+                    - label: {x: 14, y: 12, text: "NO3 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_no3_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_no3_sub, x: 14, y: 84, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+              - button:
+                  x: 169
+                  y: 120
+                  width: 141
+                  height: 112
+                  on_click:
+                    - script.execute: {id: open_editor, p: 4}
+                  widgets:
+                    - label: {x: 14, y: 12, text: "NH4 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_nh4_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_nh4_sub, x: 14, y: 84, width: 113, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+              - obj:
+                  x: 322
+                  y: 120
+                  width: 142
+                  height: 112
+                  widgets:
+                    - label: {x: 14, y: 12, text: "CO2 mg/l", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_co2_val, x: 14, y: 36, text: "--", text_font: inter_32}
+                    - label: {id: wt_co2_sub, x: 14, y: 84, width: 114, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x5C5C5C}
+
+              - label:
+                  x: 16
+                  y: 244
+                  width: 448
+                  text: "Orange = ausserhalb Soll. CO2 berechnet HA aus pH und KH."
+                  text_font: inter_14
+                  text_color: 0x5C5C5C
+
+              - button:
+                  id: wt_save
+                  x: 16
+                  y: 276
+                  width: 448
+                  height: 80
+                  on_click:
+                    - if:
+                        condition:
+                          lambda: |-
+                            for (auto &p : id(pending)) if (!p.empty()) return true;
+                            return false;
+                        then:
+                          - script.execute: save_water_test
+                  widgets:
+                    - label: {id: wt_save_label, align: CENTER, text: "Wert antippen zum Erfassen", text_font: inter_22, text_color: 0x5C5C5C}
+
+        # -------- Wasserwechsel: Schnellwahl oder -/+ in 5 %-Schritten
+        - obj:
+            id: ww_view
+            hidden: true
+            x: 0
+            y: 112
+            width: 480
+            height: 368
+            radius: 0
+            bg_opa: TRANSP
+            widgets:
+              - obj:
+                  x: 16
+                  y: 0
+                  width: 448
+                  height: 120
+                  widgets:
+                    - label: {x: 18, y: 14, text: "Gewechselte Menge", text_font: inter_14, text_color: 0x8C8C8C}
+                    - obj:
+                        x: 18
+                        y: 34
+                        width: SIZE_CONTENT
+                        height: SIZE_CONTENT
+                        bg_opa: TRANSP
+                        layout:
+                          type: flex
+                          flex_flow: ROW
+                          flex_align_cross: END
+                          pad_column: 4
+                        widgets:
+                          - label: {id: ww_val, text: "--", text_font: inter_56}
+                          - label: {text: "%", text_font: inter_22, text_color: 0x8C8C8C, pad_bottom: 10}
+                    - label: {id: ww_liters, x: 18, y: 96, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+                    - button:
+                        x: 284
+                        y: 28
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - lambda: |-
+                              id(ww_percent) = std::max(5, id(ww_percent) - 5);
+                              id(ww_touched) = true;
+                          - script.execute: refresh_ww
+                        widgets:
+                          - label: {align: CENTER, text: "-", text_font: inter_32}
+                    - button:
+                        x: 364
+                        y: 28
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - lambda: |-
+                              id(ww_percent) = std::min(100, id(ww_percent) + 5);
+                              id(ww_touched) = true;
+                          - script.execute: refresh_ww
+                        widgets:
+                          - label: {align: CENTER, text: "+", text_font: inter_32}
+
+              # Schnellwahl
+              - button:
+                  id: ww_chip_10
+                  x: 16
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 10; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_10_label, align: CENTER, text: "10%"}
+              - button:
+                  id: ww_chip_20
+                  x: 92
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 20; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_20_label, align: CENTER, text: "20%"}
+              - button:
+                  id: ww_chip_25
+                  x: 168
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 25; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_25_label, align: CENTER, text: "25%"}
+              - button:
+                  id: ww_chip_30
+                  x: 244
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 30; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_30_label, align: CENTER, text: "30%"}
+              - button:
+                  id: ww_chip_40
+                  x: 320
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 40; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_40_label, align: CENTER, text: "40%"}
+              - button:
+                  id: ww_chip_50
+                  x: 396
+                  y: 132
+                  width: 68
+                  height: 56
+                  on_click:
+                    - lambda: id(ww_percent) = 50; id(ww_touched) = true;
+                    - script.execute: refresh_ww
+                  widgets:
+                    - label: {id: ww_chip_50_label, align: CENTER, text: "50%"}
+
+              # letzter und nächster Wasserwechsel
+              - obj:
+                  x: 16
+                  y: 200
+                  width: 448
+                  height: 64
+                  widgets:
+                    - label: {id: ww_last, x: 18, y: 12, width: 412, long_mode: DOT, text: "Letzter: --", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: ww_next, x: 18, y: 34, width: 412, long_mode: DOT, text: "Nächster: --", text_font: inter_14, text_color: 0x8C8C8C}
+
+              - button:
+                  id: ww_save
+                  x: 16
+                  y: 276
+                  width: 448
+                  height: 80
+                  bg_color: 0xD9A920
+                  pressed:
+                    bg_color: 0xB08A18
+                  on_click:
+                    - script.execute: save_water_change
+                  widgets:
+                    - label: {id: ww_save_label, align: CENTER, text: "Wasserwechsel speichern", text_font: inter_22, text_color: 0x000000}
 
         # Auswahl eines Werts (über der Seite, unter der Kopfzeile)
         - obj:

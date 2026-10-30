@@ -29,8 +29,6 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # TODO remove after the first OTA: the device still announces itself under its old name
-  use_address: sht41.local
   ap:
     ssid: Aquarium Monitor Fallback
     password: "MX0zKjfKwFcK"

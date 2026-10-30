@@ -3,13 +3,13 @@ substitutions:
   light_entity: switch.aqarium_aqarium_licht_aquarium_licht
   co2_entity: switch.aqarium_co2_anlage
   pump_entity: switch.aquarium_stecker_aquariumpumpe_pwm
-  water_temp_entity: sensor.aquarium_monitor_water_temperature
-  tds_entity: sensor.aquarium_monitor_tds
-  tds_rise_entity: sensor.aquarium_monitor_tds_rise_since_water_change
-  tds_jump_entity: binary_sensor.aquarium_monitor_tds_jump
-  tds_high_entity: binary_sensor.aquarium_monitor_water_change_recommended
-  room_temp_entity: sensor.aquarium_monitor_temperature
-  room_humidity_entity: sensor.aquarium_monitor_humidity
+  water_temp_entity: sensor.aquarium_aquarium_monitor_water_temperature
+  tds_entity: sensor.aquarium_aquarium_monitor_tds
+  tds_rise_entity: sensor.aquarium_aquarium_monitor_tds_rise_since_water_change
+  tds_jump_entity: binary_sensor.aquarium_aquarium_monitor_tds_jump
+  tds_high_entity: binary_sensor.aquarium_aquarium_monitor_water_change_recommended
+  room_temp_entity: sensor.aquarium_aquarium_monitor_temperature
+  room_humidity_entity: sensor.aquarium_aquarium_monitor_humidity
 
 esphome:
   name: aquarium-display

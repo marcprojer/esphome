@@ -13,3 +13,4 @@ secrets.yaml
 # System/editor
 .DS_Store
 .vscode/
+.claude/

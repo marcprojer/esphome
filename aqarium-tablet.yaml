@@ -123,10 +123,11 @@ globals:
   - id: is_night
     type: bool
     initial_value: "false"
-  # water change amount picked on the tablet; follows the last logged change until touched
-  - id: ww_percent
-    type: int
-    initial_value: "20"
+  # water change amount in litres picked on the tablet; follows the default
+  # from HA (input_number.aq_ww_liter, set from einstellungen.yaml) until touched
+  - id: ww_liter
+    type: float
+    initial_value: "5.0"
   - id: ww_touched
     type: bool
     initial_value: "false"
@@ -445,13 +446,25 @@ sensor:
     on_value:
       - script.execute: refresh_water_change
       - script.execute: refresh_ww
+  # last logged water change in litres (attribute prozent = share of the volume)
   - platform: homeassistant
     id: ha_last_ww
     entity_id: sensor.aquarium_letzter_wasserwechsel
     on_value:
+      - script.execute: refresh_ww
+  - platform: homeassistant
+    id: ha_last_ww_pct
+    entity_id: sensor.aquarium_letzter_wasserwechsel
+    attribute: prozent
+    on_value:
+      - script.execute: refresh_ww
+  # default amount (einstellungen.yaml -> wasserwechsel_liter, reset after each save)
+  - platform: homeassistant
+    id: ha_ww_default
+    entity_id: input_number.aq_ww_liter
+    on_value:
       - lambda: |-
-          if (!id(ww_touched) && !isnan(x) && x > 0)
-            id(ww_percent) = std::min(100, std::max(5, (int) roundf(x / 5.0f) * 5));
+          if (!id(ww_touched) && !isnan(x) && x > 0) id(ww_liter) = x;
       - script.execute: refresh_ww
   - platform: homeassistant
     id: ha_volume
@@ -828,29 +841,29 @@ script:
     then:
       - lvgl.label.update:
           id: ww_val
-          text: !lambda return to_string(id(ww_percent));
+          text: !lambda return str_sprintf("%.1f", id(ww_liter));
       - lvgl.label.update:
           id: ww_liters
           text: !lambda |-
             float vol = id(ha_volume).state;
             if (isnan(vol) || vol <= 0) return std::string("");
-            return str_sprintf("= %.1f L von %.0f L", id(ww_percent) / 100.0f * vol, vol);
+            return str_sprintf("= %.0f %% von %.0f L", id(ww_liter) / vol * 100.0f, vol);
       - lvgl.widget.update:
-          id: [ww_chip_10, ww_chip_20, ww_chip_25, ww_chip_30, ww_chip_40, ww_chip_50]
+          id: [ww_chip_1, ww_chip_2, ww_chip_3, ww_chip_4, ww_chip_5, ww_chip_6]
           bg_color: 0x121212
       - lvgl.label.update:
-          id: [ww_chip_10_label, ww_chip_20_label, ww_chip_25_label, ww_chip_30_label, ww_chip_40_label, ww_chip_50_label]
+          id: [ww_chip_1_label, ww_chip_2_label, ww_chip_3_label, ww_chip_4_label, ww_chip_5_label, ww_chip_6_label]
           text_color: 0xFFFFFF
       - lambda: |-
           // highlight the preset matching the current amount
-          struct Chip { int pct; lv_obj_t *btn; lv_obj_t *lbl; };
+          struct Chip { float liter; lv_obj_t *btn; lv_obj_t *lbl; };
           const Chip chips[] = {
-            {10, id(ww_chip_10), id(ww_chip_10_label)}, {20, id(ww_chip_20), id(ww_chip_20_label)},
-            {25, id(ww_chip_25), id(ww_chip_25_label)}, {30, id(ww_chip_30), id(ww_chip_30_label)},
-            {40, id(ww_chip_40), id(ww_chip_40_label)}, {50, id(ww_chip_50), id(ww_chip_50_label)},
+            {3.0f, id(ww_chip_1), id(ww_chip_1_label)}, {5.0f, id(ww_chip_2), id(ww_chip_2_label)},
+            {7.5f, id(ww_chip_3), id(ww_chip_3_label)}, {10.0f, id(ww_chip_4), id(ww_chip_4_label)},
+            {15.0f, id(ww_chip_5), id(ww_chip_5_label)}, {20.0f, id(ww_chip_6), id(ww_chip_6_label)},
           };
           for (auto &c : chips) {
-            if (c.pct != id(ww_percent)) continue;
+            if (fabsf(c.liter - id(ww_liter)) > 0.01f) continue;
             lv_obj_set_style_bg_color(c.btn, lv_color_hex(0xD9A920), LV_PART_MAIN);
             lv_obj_set_style_text_color(c.lbl, lv_color_hex(0x000000), LV_PART_MAIN);
           }
@@ -858,10 +871,11 @@ script:
           id: ww_last
           text: !lambda |-
             auto &t = id(ha_last_ww_time).state;
-            float pct = id(ha_last_ww).state;
-            if (t.size() < 10 || isnan(pct)) return std::string("Letzter: noch keiner erfasst");
+            float liter = id(ha_last_ww).state;
+            float pct = id(ha_last_ww_pct).state;
+            if (t.size() < 10 || isnan(liter)) return std::string("Letzter: noch keiner erfasst");
             return "Letzter: " + t.substr(8, 2) + "." + t.substr(5, 2) + "." + t.substr(0, 4) +
-                   str_sprintf(" mit %.0f %%", pct);
+                   str_sprintf(" mit %.1f L", liter) + (isnan(pct) ? std::string("") : str_sprintf(" (%.0f %%)", pct));
       - lvgl.label.update:
           id: ww_next
           text: !lambda |-
@@ -877,7 +891,7 @@ script:
             return (!isnan(d) && d <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
       - lvgl.label.update:
           id: ww_save_label
-          text: !lambda return str_sprintf("%d %% Wasserwechsel speichern", id(ww_percent));
+          text: !lambda return str_sprintf("%.1f L Wasserwechsel speichern", id(ww_liter));
 
   - id: save_water_change
     mode: single
@@ -885,7 +899,7 @@ script:
       - homeassistant.action:
           action: script.aquarium_wasserwechsel_vom_tablet
           data:
-            prozent: !lambda return to_string(id(ww_percent));
+            liter: !lambda return str_sprintf("%.1f", id(ww_liter));
       - lambda: id(ww_touched) = false;
       - lvgl.label.update: {id: ww_save_label, text: "Gespeichert"}
       - delay: 3s
@@ -1460,7 +1474,7 @@ lvgl:
                           pad_column: 4
                         widgets:
                           - label: {id: ww_val, text: "--", text_font: inter_56}
-                          - label: {text: "%", text_font: inter_22, text_color: 0x8C8C8C, pad_bottom: 10}
+                          - label: {text: "L", text_font: inter_22, text_color: 0x8C8C8C, pad_bottom: 10}
                     - label: {id: ww_liters, x: 18, y: 96, text: "", text_font: inter_14, text_color: 0x8C8C8C}
                     - button:
                         x: 284
@@ -1471,7 +1485,7 @@ lvgl:
                         bg_color: 0x1E1E1E
                         on_click:
                           - lambda: |-
-                              id(ww_percent) = std::max(5, id(ww_percent) - 5);
+                              id(ww_liter) = std::max(0.5f, id(ww_liter) - 0.5f);
                               id(ww_touched) = true;
                           - script.execute: refresh_ww
                         widgets:
@@ -1485,7 +1499,9 @@ lvgl:
                         bg_color: 0x1E1E1E
                         on_click:
                           - lambda: |-
-                              id(ww_percent) = std::min(100, id(ww_percent) + 5);
+                              float vol = id(ha_volume).state;
+                              float max_l = (isnan(vol) || vol <= 0) ? 200.0f : vol;
+                              id(ww_liter) = std::min(max_l, id(ww_liter) + 0.5f);
                               id(ww_touched) = true;
                           - script.execute: refresh_ww
                         widgets:
@@ -1493,71 +1509,71 @@ lvgl:
 
               # Schnellwahl
               - button:
-                  id: ww_chip_10
+                  id: ww_chip_1
                   x: 16
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 10; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 3.0f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_10_label, align: CENTER, text: "10%"}
+                    - label: {id: ww_chip_1_label, align: CENTER, text: "3 L"}
               - button:
-                  id: ww_chip_20
+                  id: ww_chip_2
                   x: 92
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 20; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 5.0f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_20_label, align: CENTER, text: "20%"}
+                    - label: {id: ww_chip_2_label, align: CENTER, text: "5 L"}
               - button:
-                  id: ww_chip_25
+                  id: ww_chip_3
                   x: 168
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 25; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 7.5f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_25_label, align: CENTER, text: "25%"}
+                    - label: {id: ww_chip_3_label, align: CENTER, text: "7.5 L"}
               - button:
-                  id: ww_chip_30
+                  id: ww_chip_4
                   x: 244
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 30; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 10.0f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_30_label, align: CENTER, text: "30%"}
+                    - label: {id: ww_chip_4_label, align: CENTER, text: "10 L"}
               - button:
-                  id: ww_chip_40
+                  id: ww_chip_5
                   x: 320
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 40; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 15.0f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_40_label, align: CENTER, text: "40%"}
+                    - label: {id: ww_chip_5_label, align: CENTER, text: "15 L"}
               - button:
-                  id: ww_chip_50
+                  id: ww_chip_6
                   x: 396
                   y: 132
                   width: 68
                   height: 56
                   on_click:
-                    - lambda: id(ww_percent) = 50; id(ww_touched) = true;
+                    - lambda: id(ww_liter) = 20.0f; id(ww_touched) = true;
                     - script.execute: refresh_ww
                   widgets:
-                    - label: {id: ww_chip_50_label, align: CENTER, text: "50%"}
+                    - label: {id: ww_chip_6_label, align: CENTER, text: "20 L"}
 
               # letzter und nächster Wasserwechsel
               - obj:

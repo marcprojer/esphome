@@ -42,6 +42,7 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 - **Hardware** (Licht, CO2, Pumpe, Leistung, Monitor; die Substitutions oben) gehört vorerst nur zu Becken 0. `refresh_hw` zeigt bei Becken 1 „--“, und die Schalter sind gesperrt. Die Hardware von Becken 1 wird später eingebunden.
 - **Speichern** ruft je nach `tank` `script.aquarium_…_vom_tablet` oder `script.aquarium1_…_vom_tablet` auf.
 - **Startseite** `page_start` mit einem Button pro Becken (`open_tank`). Kopfzeile: auf der Startseite der Titel, im Becken der Zurück-Knopf mit Kurzname (`hdr_tank`) und die Tabs (`hdr_nav`). Nach dem Aufwachen zeigt das Tablet immer die Startseite (`show_start` in `on_turn_on` der Hintergrundbeleuchtung).
+- **Status** (Übersicht und Startseite): TDS-Sprung bzw. TDS zu hoch (nur Becken 0) > Warnungen aus HA (`sensor.aquarium<s>_warnungen`, Text = Attribut `erste`, dazu „(+n)“) > Werte ausser Soll > „Alles in Ordnung“.
 
 ### Allgemein
 

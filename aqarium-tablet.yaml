@@ -409,22 +409,39 @@ script:
                   - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
                   - lvgl.label.update: {id: ov_status_text, text: "TDS zu hoch", text_color: 0xFF7A3D}
                 else:
+                  # Warnungen aus HA (Temperatur, Pumpe, CO2, ...): wichtigste mit Anzahl weiterer
                   - if:
                       condition:
                         lambda: |-
-                          return (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state >= 1;
+                          return (id(tank) ? id(ha1_warn_count) : id(ha_warn_count))->state >= 1;
                       then:
                         - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
                         - lvgl.label.update:
                             id: ov_status_text
                             text_color: 0xFF7A3D
                             text: !lambda |-
-                              int n = (int) (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state;
-                              return n == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", n);
+                              int n = (int) (id(tank) ? id(ha1_warn_count) : id(ha_warn_count))->state;
+                              std::string t = (id(tank) ? id(ha1_warn_text) : id(ha_warn_text))->state;
+                              if (t.empty() || t == "unknown") t = str_sprintf("%d Warnungen", n);
+                              else if (n > 1) t += str_sprintf(" (+%d)", n - 1);
+                              return t;
                       else:
-                        # traffic light: ok green, warning orange, alert red
-                        - lvgl.label.update: {id: ov_status_icon, text: "\U000F05E1", text_color: 0x4CAF50}
-                        - lvgl.label.update: {id: ov_status_text, text: "Alles in Ordnung", text_color: 0xFFFFFF}
+                        - if:
+                            condition:
+                              lambda: |-
+                                return (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state >= 1;
+                            then:
+                              - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
+                              - lvgl.label.update:
+                                  id: ov_status_text
+                                  text_color: 0xFF7A3D
+                                  text: !lambda |-
+                                    int n = (int) (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state;
+                                    return n == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", n);
+                            else:
+                              # traffic light: ok green, warning orange, alert red
+                              - lvgl.label.update: {id: ov_status_icon, text: "\U000F05E1", text_color: 0x4CAF50}
+                              - lvgl.label.update: {id: ov_status_text, text: "Alles in Ordnung", text_color: 0xFFFFFF}
       - lvgl.label.update:
           id: ov_tds_rise
           text_color: !lambda |-
@@ -836,13 +853,13 @@ script:
             return n == -1 ? std::string("seit 1 Tag fällig") : str_sprintf("seit %d Tagen fällig", -n);
           };
           struct T {
-            text_sensor::TextSensor *name, *product; sensor::Sensor *due, *oor;
+            text_sensor::TextSensor *name, *product, *wtext; sensor::Sensor *due, *oor, *warn;
             lv_obj_t *l_name, *l_ww, *l_dose, *l_icon, *l_status; const char *fallback;
           };
           const T tanks[] = {
-            {id(ha_name), id(ha_next_dose_product), id(ha_water_change_due), id(ha_out_of_range_count),
+            {id(ha_name), id(ha_next_dose_product), id(ha_warn_text), id(ha_water_change_due), id(ha_out_of_range_count), id(ha_warn_count),
              id(st0_name), id(st0_ww), id(st0_dose), id(st0_status_icon), id(st0_status), "Becken 1"},
-            {id(ha1_name), id(ha1_next_dose_product), id(ha1_water_change_due), id(ha1_out_of_range_count),
+            {id(ha1_name), id(ha1_next_dose_product), id(ha1_warn_text), id(ha1_water_change_due), id(ha1_out_of_range_count), id(ha1_warn_count),
              id(st1_name), id(st1_ww), id(st1_dose), id(st1_status_icon), id(st1_status), "Becken 2"},
           };
           for (int t = 0; t < 2; t++) {
@@ -863,11 +880,17 @@ script:
             lv_label_set_text(k.l_dose, dose.c_str());
             lv_obj_set_style_text_color(k.l_dose, lv_color_hex((dd != INT_MIN && dd <= 0) ? 0xFF7A3D : 0xFFFFFF), LV_PART_MAIN);
 
-            // Status: TDS (nur Becken 0) > Werte ausser Soll > ok
+            // Status: TDS (nur Becken 0) > Warnungen aus HA > Werte ausser Soll > ok
             std::string st; uint32_t col; const char *icon;
             int oor = isnan(k.oor->state) ? 0 : (int) k.oor->state;
+            int nw = isnan(k.warn->state) ? 0 : (int) k.warn->state;
+            std::string wt = k.wtext->state;
             if (t == 0 && id(ha_tds_jump).state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; icon = "\U000F0026"; }
             else if (t == 0 && id(ha_tds_high).state) { st = "TDS zu hoch"; col = 0xFF7A3D; icon = "\U000F0026"; }
+            else if (nw >= 1) {
+              st = (wt.empty() || wt == "unknown") ? str_sprintf("%d Warnungen", nw) : (nw > 1 ? wt + str_sprintf(" (+%d)", nw - 1) : wt);
+              col = 0xFF7A3D; icon = "\U000F0026";
+            }
             else if (oor >= 1) { st = oor == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", oor); col = 0xFF7A3D; icon = "\U000F0026"; }
             else { st = "Alles in Ordnung"; col = 0x4CAF50; icon = "\U000F05E1"; }
             lv_label_set_text(k.l_status, st.c_str());

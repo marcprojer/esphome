@@ -45,6 +45,14 @@ sensor:
       - script.execute: refresh_status
       - script.execute: refresh_start
 
+  # Warnungen (packages/aquarium<s>_warnungen.yaml): Anzahl aktiver Warnungen
+  - platform: homeassistant
+    id: ha${s}_warn_count
+    entity_id: sensor.aquarium${s}_warnungen
+    on_value:
+      - script.execute: refresh_status
+      - script.execute: refresh_start
+
   # Wasserwechsel (packages/aquarium<s>_logbuch.yaml)
   - platform: homeassistant
     id: ha${s}_water_change_due
@@ -88,6 +96,15 @@ text_sensor:
     on_value:
       - script.execute: refresh_start
       - script.execute: refresh_header
+
+  # wichtigste Warnung als Text, z. B. "Temperatur 25.6 °C (max. 25)"
+  - platform: homeassistant
+    id: ha${s}_warn_text
+    entity_id: sensor.aquarium${s}_warnungen
+    attribute: erste
+    on_value:
+      - script.execute: refresh_status
+      - script.execute: refresh_start
 
   # z. B. "2026-10-14 13:00:00"
   - platform: homeassistant

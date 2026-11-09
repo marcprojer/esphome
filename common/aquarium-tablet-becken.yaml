@@ -80,7 +80,7 @@ sensor:
       - script.execute: refresh_ww
 
 text_sensor:
-  # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube 30L"
+  # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube Garnelen"
   - platform: homeassistant
     id: ha${s}_name
     entity_id: sensor.aquarium${s}_einstellungen

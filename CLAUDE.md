@@ -36,7 +36,7 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 ## Aquarium Tablet (`aqarium-tablet.yaml`, Gerät `aquarium-display`)
 
 ### Zwei Becken
-- **Becken 0** = HA-Becken `aquarium` (Nano Cube 30L), **Becken 1** = `aquarium1` (Nano Cube 20L). Der Global `tank` (0/1) ist das aktive Becken.
+- **Becken 0** = HA-Becken `aquarium` (Nano Cube Garnelen), **Becken 1** = `aquarium1` (Nano Cube Plants). Der Global `tank` (0/1) ist das aktive Becken.
 - **Daten pro Becken:** `common/aquarium-tablet-becken.yaml` wird über `packages` zweimal eingebunden (`vars: s` = Entitäts-Suffix `""`/`"1"`, `n` = Index). Die IDs heissen `ha_<x>` (Becken 0) und `ha1_<x>` (Becken 1).
 - **In Lambdas immer das aktive Becken lesen**, mit `(id(tank) ? id(ha1_x) : id(ha_x))->state`. ESPHome wandelt nur `id(x).` in `x->` um; nach einem Ausdruck in Klammern muss deshalb `->` stehen. Einzeilige Lambdas mit `? … : …` als YAML-Block (`|-`) schreiben, sonst liest YAML das `: ` als Schlüssel.
 - **Hardware** (Licht, CO2, Pumpe, Leistung, Monitor; die Substitutions oben) gehört vorerst nur zu Becken 0. `refresh_hw` zeigt bei Becken 1 „--“, und die Schalter sind gesperrt. Die Hardware von Becken 1 wird später eingebunden.

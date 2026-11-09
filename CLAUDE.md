@@ -54,7 +54,7 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 - **Design:** LVGL, Dark Mode mit wenigen Farbakzenten (Gelb `0xD9A920` = an/aktiv, Orange `0xFF7A3D` = Warnung, Rot = TDS-Sprung, Grün = alles in Ordnung).
 - **Tabs:**
   - **Übersicht:** Sensoren, Geräte, Leistung, Wasserwechsel, nächste Zugabe.
-  - **Steuerung:** Licht, CO2, Pumpe.
+  - **Steuerung:** Licht, CO2, Pumpe und **Wartung** (ruft `script.aquarium<s>_wartung_umschalten` auf; Zustand aus `input_boolean.aq<s>_wartung`, Text aus Attribut `text` von `sensor.aquarium<s>_wartung_rest`). Die Display-Helligkeit steht als Substitution `display_brightness` (in %) im YAML und wird beim Start gesetzt.
   - **Pflege** (früher „Wasser“) mit vier Unter-Tabs (`show_care`, v = 0 bis 3):
     - *Werte:* Eingabe der Tropfentests.
     - *Wechsel:* Wasserwechsel in Liter; vorbelegt mit `input_number.aq_ww_liter`, Schnellwahl 3/5/7.5/10/15/20 L.

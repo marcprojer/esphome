@@ -87,7 +87,24 @@ sensor:
     on_value:
       - script.execute: refresh_ww
 
+binary_sensor:
+  # Wartung läuft (packages/aquarium<s>_wartung.yaml)
+  - platform: homeassistant
+    id: ha${s}_wartung
+    entity_id: input_boolean.aq${s}_wartung
+    on_state:
+      - script.execute: refresh_maint
+
 text_sensor:
+  # Wartung: fertiger Text, z. B. "CO2-Anlage und Pumpe 30 min aus" oder
+  # "Aktiv, noch 23 min · tippen zum Beenden"
+  - platform: homeassistant
+    id: ha${s}_wartung_text
+    entity_id: sensor.aquarium${s}_wartung_rest
+    attribute: text
+    on_value:
+      - script.execute: refresh_maint
+
   # Tab "Pflege": Zusätze und Futtersorten als Zeilen "name|einheit|mehrzahl|schritt|info"
   # und der Vorschlag (was fällig ist), aus packages/aquarium<s>_logbuch.yaml
   - platform: homeassistant

@@ -35,6 +35,16 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 
 ## Aquarium Tablet (`aqarium-tablet.yaml`, Gerät `aquarium-display`)
 
+### Zwei Becken
+- **Becken 0** = HA-Becken `aquarium` (Nano Cube 30L), **Becken 1** = `aquarium1` (Nano Cube 20L). Der Global `tank` (0/1) ist das aktive Becken.
+- **Daten pro Becken:** `common/aquarium-tablet-becken.yaml` wird über `packages` zweimal eingebunden (`vars: s` = Entitäts-Suffix `""`/`"1"`, `n` = Index). Die IDs heissen `ha_<x>` (Becken 0) und `ha1_<x>` (Becken 1).
+- **In Lambdas immer das aktive Becken lesen**, mit `(id(tank) ? id(ha1_x) : id(ha_x))->state`. ESPHome wandelt nur `id(x).` in `x->` um; nach einem Ausdruck in Klammern muss deshalb `->` stehen. Einzeilige Lambdas mit `? … : …` als YAML-Block (`|-`) schreiben, sonst liest YAML das `: ` als Schlüssel.
+- **Hardware** (Licht, CO2, Pumpe, Leistung, Monitor; die Substitutions oben) gehört vorerst nur zu Becken 0. `refresh_hw` zeigt bei Becken 1 „--“, und die Schalter sind gesperrt. Die Hardware von Becken 1 wird später eingebunden.
+- **Speichern** ruft je nach `tank` `script.aquarium_…_vom_tablet` oder `script.aquarium1_…_vom_tablet` auf.
+- **Startseite** `page_start` mit einem Button pro Becken (`open_tank`). Kopfzeile: auf der Startseite der Titel, im Becken der Zurück-Knopf mit Kurzname (`hdr_tank`) und die Tabs (`hdr_nav`). Nach dem Aufwachen zeigt das Tablet immer die Startseite (`show_start` in `on_turn_on` der Hintergrundbeleuchtung).
+
+### Allgemein
+
 - **Hardware:** Guition 4848S040 (ESP32-S3, 480×480), `display: model: GUITION-4848S040`. Das generische ST7701S-Profil führt zu einem unscharfen, flackernden Bild.
 - **Design:** LVGL, Dark Mode mit wenigen Farbakzenten (Gelb `0xD9A920` = an/aktiv, Orange `0xFF7A3D` = Warnung, Rot = TDS-Sprung, Grün = alles in Ordnung).
 - **Tabs:**

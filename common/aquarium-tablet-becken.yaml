@@ -1,0 +1,156 @@
+# Home-Assistant-Daten eines Aquarium-Beckens für das Aquarium-Tablet.
+# Wird in aqarium-tablet.yaml pro Becken einmal eingebunden (packages):
+#   s: Suffix der Entitäten ("" = Becken "aquarium", "1" = Becken "aquarium1")
+#   n: Index des Beckens auf dem Tablet (0, 1), vergleicht mit id(tank)
+# Die IDs heissen ha<s>_..., z. B. ha_ph (Becken 0) und ha1_ph (Becken 1).
+# Die Anzeige liest immer das aktive Becken: (id(tank) ? id(ha1_x) : id(ha_x)).
+
+sensor:
+  # Tropfentests (packages/aquarium<s>_wasserwerte.yaml)
+  - platform: homeassistant
+    id: ha${s}_ph
+    entity_id: sensor.aquarium${s}_ph
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_kh
+    entity_id: sensor.aquarium${s}_kh
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_no2
+    entity_id: sensor.aquarium${s}_no2
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_no3
+    entity_id: sensor.aquarium${s}_no3
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_nh4
+    entity_id: sensor.aquarium${s}_nh4
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_co2_mgl
+    entity_id: sensor.aquarium${s}_co2
+    on_value:
+      - script.execute: refresh_water
+
+  - platform: homeassistant
+    id: ha${s}_out_of_range_count
+    entity_id: sensor.aquarium${s}_wasserwerte_status
+    on_value:
+      - script.execute: refresh_status
+      - script.execute: refresh_start
+
+  # Wasserwechsel (packages/aquarium<s>_logbuch.yaml)
+  - platform: homeassistant
+    id: ha${s}_water_change_due
+    entity_id: sensor.aquarium${s}_wasserwechsel_faellig
+    on_value:
+      - script.execute: refresh_water_change
+      - script.execute: refresh_ww
+      - script.execute: refresh_start
+  # letzter Wasserwechsel in Liter (Attribut prozent = Anteil am Volumen)
+  - platform: homeassistant
+    id: ha${s}_last_ww
+    entity_id: sensor.aquarium${s}_letzter_wasserwechsel
+    on_value:
+      - script.execute: refresh_ww
+  - platform: homeassistant
+    id: ha${s}_last_ww_pct
+    entity_id: sensor.aquarium${s}_letzter_wasserwechsel
+    attribute: prozent
+    on_value:
+      - script.execute: refresh_ww
+  # Vorbelegung (einstellungen.yaml -> wasserwechsel_liter, nach jedem Speichern zurückgesetzt)
+  - platform: homeassistant
+    id: ha${s}_ww_default
+    entity_id: input_number.aq${s}_ww_liter
+    on_value:
+      - lambda: |-
+          if (id(tank) == ${n} && !id(ww_touched) && !isnan(x) && x > 0) id(ww_liter) = x;
+      - script.execute: refresh_ww
+  - platform: homeassistant
+    id: ha${s}_volume
+    entity_id: input_number.aq${s}_systemvolumen
+    on_value:
+      - script.execute: refresh_ww
+
+text_sensor:
+  # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube 30L"
+  - platform: homeassistant
+    id: ha${s}_name
+    entity_id: sensor.aquarium${s}_einstellungen
+    attribute: name
+    on_value:
+      - script.execute: refresh_start
+      - script.execute: refresh_header
+
+  # z. B. "2026-10-14 13:00:00"
+  - platform: homeassistant
+    id: ha${s}_last_ww_time
+    entity_id: sensor.aquarium${s}_letzter_wasserwechsel
+    attribute: zeitpunkt
+    on_value:
+      - script.execute: refresh_ww
+
+  # nächste Zugabe, z. B. 2026-11-02T12:00:00+01:00
+  - platform: homeassistant
+    id: ha${s}_next_dose
+    entity_id: sensor.aquarium${s}_naechste_zugabe
+    on_value:
+      - script.execute: refresh_dose
+  - platform: homeassistant
+    id: ha${s}_next_dose_product
+    entity_id: sensor.aquarium${s}_naechste_zugabe
+    attribute: produkt
+    on_value:
+      - script.execute: refresh_dose
+
+  - platform: homeassistant
+    id: ha${s}_out_of_range
+    entity_id: sensor.aquarium${s}_wasserwerte_status
+    attribute: ausser_soll
+    on_value:
+      - script.execute: refresh_water
+
+  # Datum des letzten Tests je Wert, z. B. "2026-10-12 10:44:57"
+  - platform: homeassistant
+    id: ha${s}_ph_date
+    entity_id: sensor.aquarium${s}_ph
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_kh_date
+    entity_id: sensor.aquarium${s}_kh
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_no2_date
+    entity_id: sensor.aquarium${s}_no2
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_no3_date
+    entity_id: sensor.aquarium${s}_no3
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_nh4_date
+    entity_id: sensor.aquarium${s}_nh4
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water
+  - platform: homeassistant
+    id: ha${s}_co2_date
+    entity_id: sensor.aquarium${s}_co2
+    attribute: gemessen_am
+    on_value:
+      - script.execute: refresh_water

@@ -19,6 +19,14 @@ substitutions:
   night_start_hour: "23"
   night_end_hour: "7"
 
+# Home-Assistant-Daten pro Becken (Wasserwerte, Wasserwechsel, Zugabe, Name),
+# siehe common/aquarium-tablet-becken.yaml. Becken 0 = "aquarium" (Nano Cube 30L),
+# Becken 1 = "aquarium1" (Nano Cube 20L). Die Hardware-Entitäten oben gehören zu
+# Becken 0; die Hardware von Becken 1 wird später eingebunden.
+packages:
+  becken0: !include {file: common/aquarium-tablet-becken.yaml, vars: {s: "", n: "0"}}
+  becken1: !include {file: common/aquarium-tablet-becken.yaml, vars: {s: "1", n: "1"}}
+
 esphome:
   name: aquarium-display
   friendly_name: Aquarium Display
@@ -131,10 +139,14 @@ globals:
   - id: ww_touched
     type: bool
     initial_value: "false"
-  # days until the next dose (INT_MIN = unknown)
+  # days until the next dose per tank (INT_MIN = unknown)
   - id: dose_days
+    type: std::vector<int>
+    initial_value: std::vector<int>(2, INT_MIN)
+  # active tank: 0 = "aquarium" (Nano Cube 30L), 1 = "aquarium1" (Nano Cube 20L)
+  - id: tank
     type: int
-    initial_value: INT_MIN
+    initial_value: "0"
 
 # Colors: background 0x000000, tile 0x121212, text 0xFFFFFF / 0x8C8C8C / 0x5C5C5C,
 # accent 0xD9A920 dark yellow (on, new); status traffic light: ok 0x4CAF50, warning 0xFF7A3D, alert 0xFF5C5C
@@ -174,6 +186,8 @@ font:
       - "\U000F1402" # pump
       - "\U000F0026" # alert
       - "\U000F05E1" # check-circle-outline
+      - "\U000F0141" # chevron-left
+      - "\U000F0142" # chevron-right
   - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: mdi_28
     size: 28
@@ -209,6 +223,8 @@ light:
     # also covers switching the backlight from Home Assistant
     on_turn_on:
       - lambda: id(last_activity) = millis();
+      # after waking always start on the start page
+      - script.execute: show_start
       - if:
           condition: lvgl.is_paused
           then:
@@ -277,64 +293,21 @@ binary_sensor:
     entity_id: ${light_entity}
     trigger_on_initial_state: true
     on_state:
-      - if:
-          condition:
-            lambda: return x;
-          then:
-            - lvgl.label.update: {id: ov_light_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ov_light_state, text: "An", text_color: 0xFFFFFF}
-            - lvgl.label.update: {id: ctl_light_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ctl_light_state, text: "Eingeschaltet"}
-            - lvgl.widget.update: {id: ctl_light_switch, state: {checked: true}}
-          else:
-            - lvgl.label.update: {id: ov_light_icon, text_color: 0x5C5C5C}
-            - lvgl.label.update: {id: ov_light_state, text: "Aus", text_color: 0x8C8C8C}
-            - lvgl.label.update: {id: ctl_light_icon, text_color: 0x5C5C5C}
-            - lvgl.label.update: {id: ctl_light_state, text: "Ausgeschaltet"}
-            - lvgl.widget.update: {id: ctl_light_switch, state: {checked: false}}
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_co2
     entity_id: ${co2_entity}
     trigger_on_initial_state: true
     on_state:
-      - if:
-          condition:
-            lambda: return x;
-          then:
-            - lvgl.label.update: {id: ov_co2_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ov_co2_state, text: "An", text_color: 0xFFFFFF}
-            - lvgl.label.update: {id: ctl_co2_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ctl_co2_state, text: "Eingeschaltet"}
-            - lvgl.widget.update: {id: ctl_co2_switch, state: {checked: true}}
-          else:
-            - lvgl.label.update: {id: ov_co2_icon, text_color: 0x5C5C5C}
-            - lvgl.label.update: {id: ov_co2_state, text: "Aus", text_color: 0x8C8C8C}
-            - lvgl.label.update: {id: ctl_co2_icon, text_color: 0x5C5C5C}
-            - lvgl.label.update: {id: ctl_co2_state, text: "Ausgeschaltet"}
-            - lvgl.widget.update: {id: ctl_co2_switch, state: {checked: false}}
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_pump
     entity_id: ${pump_entity}
     trigger_on_initial_state: true
     on_state:
-      - if:
-          condition:
-            lambda: return x;
-          then:
-            - lvgl.label.update: {id: ov_pump_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ov_pump_state, text: "An", text_color: 0xFFFFFF}
-            - lvgl.label.update: {id: ctl_pump_icon, text_color: 0xD9A920}
-            - lvgl.label.update: {id: ctl_pump_state, text: "Eingeschaltet"}
-            - lvgl.widget.update: {id: ctl_pump_switch, state: {checked: true}}
-          else:
-            # pump off is unusual: highlight it
-            - lvgl.label.update: {id: ov_pump_icon, text_color: 0xFF7A3D}
-            - lvgl.label.update: {id: ov_pump_state, text: "Aus", text_color: 0xFF7A3D}
-            - lvgl.label.update: {id: ctl_pump_icon, text_color: 0xFF7A3D}
-            - lvgl.label.update: {id: ctl_pump_state, text: "Ausgeschaltet"}
-            - lvgl.widget.update: {id: ctl_pump_switch, state: {checked: false}}
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_tds_jump
@@ -355,29 +328,19 @@ sensor:
     id: ha_water_temp
     entity_id: ${water_temp_entity}
     on_value:
-      - lvgl.label.update:
-          id: ov_water_temp
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.1f", x);
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_tds
     entity_id: ${tds_entity}
     on_value:
-      - lvgl.label.update:
-          id: ov_tds
-          text: !lambda |-
-            return isnan(x) ? std::string("--") : str_sprintf("%.0f", x);
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_tds_rise
     entity_id: ${tds_rise_entity}
     on_value:
-      - lvgl.label.update:
-          id: ov_tds_rise
-          text: !lambda |-
-            if (isnan(x)) return std::string("Seit Wasserwechsel: --");
-            return str_sprintf("Seit Wasserwechsel: %+.0f %%", x);
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_room_temp
@@ -395,149 +358,8 @@ sensor:
     id: ha_power
     entity_id: ${power_entity}
     on_value:
-      - lvgl.label.update:
-          id: ov_power
-          text: !lambda |-
-            if (isnan(x)) return std::string("--");
-            return x < 10 ? str_sprintf("%.1f", x) : str_sprintf("%.0f", x);
+      - script.execute: refresh_hw
 
-  # manual water tests (packages/aquarium_wasserwerte.yaml)
-  - platform: homeassistant
-    id: ha_ph
-    entity_id: sensor.aquarium_ph
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_kh
-    entity_id: sensor.aquarium_kh
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_no2
-    entity_id: sensor.aquarium_no2
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_no3
-    entity_id: sensor.aquarium_no3
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_nh4
-    entity_id: sensor.aquarium_nh4
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_co2_mgl
-    entity_id: sensor.aquarium_co2
-    on_value:
-      - script.execute: refresh_water
-
-  - platform: homeassistant
-    id: ha_out_of_range_count
-    entity_id: sensor.aquarium_wasserwerte_status
-    on_value:
-      - script.execute: refresh_status
-
-  # water change log (packages/aquarium_logbuch.yaml)
-  - platform: homeassistant
-    id: ha_water_change_due
-    entity_id: sensor.aquarium_wasserwechsel_faellig
-    on_value:
-      - script.execute: refresh_water_change
-      - script.execute: refresh_ww
-  # last logged water change in litres (attribute prozent = share of the volume)
-  - platform: homeassistant
-    id: ha_last_ww
-    entity_id: sensor.aquarium_letzter_wasserwechsel
-    on_value:
-      - script.execute: refresh_ww
-  - platform: homeassistant
-    id: ha_last_ww_pct
-    entity_id: sensor.aquarium_letzter_wasserwechsel
-    attribute: prozent
-    on_value:
-      - script.execute: refresh_ww
-  # default amount (einstellungen.yaml -> wasserwechsel_liter, reset after each save)
-  - platform: homeassistant
-    id: ha_ww_default
-    entity_id: input_number.aq_ww_liter
-    on_value:
-      - lambda: |-
-          if (!id(ww_touched) && !isnan(x) && x > 0) id(ww_liter) = x;
-      - script.execute: refresh_ww
-  - platform: homeassistant
-    id: ha_volume
-    entity_id: input_number.aq_systemvolumen
-    on_value:
-      - script.execute: refresh_ww
-
-text_sensor:
-  # e.g. "2026-10-14 13:00:00"
-  - platform: homeassistant
-    id: ha_last_ww_time
-    entity_id: sensor.aquarium_letzter_wasserwechsel
-    attribute: zeitpunkt
-    on_value:
-      - script.execute: refresh_ww
-
-  # next dose from the logbook (packages/aquarium_logbuch.yaml), e.g. 2026-11-02T12:00:00+01:00
-  - platform: homeassistant
-    id: ha_next_dose
-    entity_id: sensor.aquarium_naechste_zugabe
-    on_value:
-      - script.execute: refresh_dose
-  - platform: homeassistant
-    id: ha_next_dose_product
-    entity_id: sensor.aquarium_naechste_zugabe
-    attribute: produkt
-    on_value:
-      - script.execute: refresh_dose
-
-  - platform: homeassistant
-    id: ha_out_of_range
-    entity_id: sensor.aquarium_wasserwerte_status
-    attribute: ausser_soll
-    on_value:
-      - script.execute: refresh_water
-
-  # date of the last test per value, e.g. "2026-10-12 10:44:57"
-  - platform: homeassistant
-    id: ha_ph_date
-    entity_id: sensor.aquarium_ph
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_kh_date
-    entity_id: sensor.aquarium_kh
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_no2_date
-    entity_id: sensor.aquarium_no2
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_no3_date
-    entity_id: sensor.aquarium_no3
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_nh4_date
-    entity_id: sensor.aquarium_nh4
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
-  - platform: homeassistant
-    id: ha_co2_date
-    entity_id: sensor.aquarium_co2
-    attribute: gemessen_am
-    on_value:
-      - script.execute: refresh_water
 
 # ---------------------------------------------------------------------------
 # UI refresh
@@ -565,7 +387,8 @@ script:
           text: !lambda |-
             float t = id(ha_room_temp).state;
             float h = id(ha_room_humidity).state;
-            if (isnan(t)) return std::string("Raum --");
+            // Sensoren des Aquarium Monitors gehören zu Becken 0
+            if (id(tank) != 0 || isnan(t)) return std::string("Raum --");
             if (isnan(h)) return str_sprintf("Raum %.1f °C", t);
             return str_sprintf("Raum %.1f °C · %.0f %%", t, h);
 
@@ -574,28 +397,29 @@ script:
     then:
       - if:
           condition:
-            binary_sensor.is_on: ha_tds_jump
+            lambda: return id(tank) == 0 && id(ha_tds_jump).state;
           then:
             - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF5C5C}
             - lvgl.label.update: {id: ov_status_text, text: "TDS-Sprung erkannt", text_color: 0xFF5C5C}
           else:
             - if:
                 condition:
-                  binary_sensor.is_on: ha_tds_high
+                  lambda: return id(tank) == 0 && id(ha_tds_high).state;
                 then:
                   - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
                   - lvgl.label.update: {id: ov_status_text, text: "TDS zu hoch", text_color: 0xFF7A3D}
                 else:
                   - if:
                       condition:
-                        lambda: return id(ha_out_of_range_count).state >= 1;
+                        lambda: |-
+                          return (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state >= 1;
                       then:
                         - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
                         - lvgl.label.update:
                             id: ov_status_text
                             text_color: 0xFF7A3D
                             text: !lambda |-
-                              int n = (int) id(ha_out_of_range_count).state;
+                              int n = (int) (id(tank) ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state;
                               return n == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", n);
                       else:
                         # traffic light: ok green, warning orange, alert red
@@ -604,14 +428,14 @@ script:
       - lvgl.label.update:
           id: ov_tds_rise
           text_color: !lambda |-
-            return id(ha_tds_high).state ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
+            return (id(tank) == 0 && id(ha_tds_high).state) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
 
   - id: refresh_water_change
     then:
       - lvgl.label.update:
           id: ov_ww
           text: !lambda |-
-            float d = id(ha_water_change_due).state;
+            float d = (id(tank) ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
             if (isnan(d)) return std::string("--");
             int n = (int) d;
             if (n > 1) return str_sprintf("in %d Tagen", n);
@@ -619,10 +443,10 @@ script:
             if (n == 0) return std::string("heute");
             return n == -1 ? std::string("seit 1 Tag fällig") : str_sprintf("seit %d Tagen fällig", -n);
           text_color: !lambda |-
-            float d = id(ha_water_change_due).state;
+            float d = (id(tank) ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
             return (!isnan(d) && d <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
 
-  # next dose from the logbook: days until due, compared by local calendar date
+  # next dose from the logbook: days until due per tank, compared by local calendar date
   - id: refresh_dose
     then:
       - lambda: |-
@@ -633,30 +457,33 @@ script:
             int doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
             return era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy;
           };
-          int y, m, d;
           auto now = id(ha_time).now();
-          if (!now.is_valid() || sscanf(id(ha_next_dose).state.c_str(), "%d-%d-%d", &y, &m, &d) != 3) {
-            id(dose_days) = INT_MIN;
-            return;
+          const std::string *due[] = {&id(ha_next_dose).state, &id(ha1_next_dose).state};
+          for (int t = 0; t < 2; t++) {
+            int y, m, d;
+            if (!now.is_valid() || sscanf(due[t]->c_str(), "%d-%d-%d", &y, &m, &d) != 3)
+              id(dose_days)[t] = INT_MIN;
+            else
+              id(dose_days)[t] = day_number(y, m, d) - day_number(now.year, now.month, now.day_of_month);
           }
-          id(dose_days) = day_number(y, m, d) - day_number(now.year, now.month, now.day_of_month);
       - lvgl.label.update:
           id: ov_dose
           text: !lambda |-
-            int n = id(dose_days);
+            int n = id(dose_days)[id(tank)];
             if (n == INT_MIN) return std::string("--");
             if (n > 1) return str_sprintf("in %d Tagen", n);
             if (n == 1) return std::string("morgen");
             if (n == 0) return std::string("heute");
             return n == -1 ? std::string("seit 1 Tag fällig") : str_sprintf("seit %d Tagen fällig", -n);
           text_color: !lambda |-
-            int n = id(dose_days);
+            int n = id(dose_days)[id(tank)];
             return (n != INT_MIN && n <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: ov_dose_product
           text: !lambda |-
-            auto &p = id(ha_next_dose_product).state;
+            auto &p = (id(tank) ? id(ha1_next_dose_product) : id(ha_next_dose_product))->state;
             return (p.empty() || p == "unknown") ? std::string("Zugabe") : p;
+      - script.execute: refresh_start
 
   # Wasser tab: new (unsaved) value in accent, else last test (orange if out of range)
   - id: refresh_water
@@ -665,54 +492,54 @@ script:
           id: wt_ph_val
           text: !lambda |-
             if (!id(pending)[0].empty()) return id(pending)[0];
-            float v = id(ha_ph).state;
+            float v = (id(tank) ? id(ha1_ph) : id(ha_ph))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%.1f", v);
           text_color: !lambda |-
             if (!id(pending)[0].empty()) return lv_color_hex(0xD9A920);
-            return id(ha_out_of_range).state.find("ph") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("ph") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: wt_kh_val
           text: !lambda |-
             if (!id(pending)[1].empty()) return id(pending)[1];
-            float v = id(ha_kh).state;
+            float v = (id(tank) ? id(ha1_kh) : id(ha_kh))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%g", v);
           text_color: !lambda |-
             if (!id(pending)[1].empty()) return lv_color_hex(0xD9A920);
-            return id(ha_out_of_range).state.find("kh") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("kh") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: wt_no2_val
           text: !lambda |-
             if (!id(pending)[2].empty()) return id(pending)[2];
-            float v = id(ha_no2).state;
+            float v = (id(tank) ? id(ha1_no2) : id(ha_no2))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%g", v);
           text_color: !lambda |-
             if (!id(pending)[2].empty()) return lv_color_hex(0xD9A920);
-            return id(ha_out_of_range).state.find("no2") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("no2") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: wt_no3_val
           text: !lambda |-
             if (!id(pending)[3].empty()) return id(pending)[3];
-            float v = id(ha_no3).state;
+            float v = (id(tank) ? id(ha1_no3) : id(ha_no3))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%g", v);
           text_color: !lambda |-
             if (!id(pending)[3].empty()) return lv_color_hex(0xD9A920);
-            return id(ha_out_of_range).state.find("no3") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("no3") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: wt_nh4_val
           text: !lambda |-
             if (!id(pending)[4].empty()) return id(pending)[4];
-            float v = id(ha_nh4).state;
+            float v = (id(tank) ? id(ha1_nh4) : id(ha_nh4))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%g", v);
           text_color: !lambda |-
             if (!id(pending)[4].empty()) return lv_color_hex(0xD9A920);
-            return id(ha_out_of_range).state.find("nh4") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("nh4") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       - lvgl.label.update:
           id: wt_co2_val
           text: !lambda |-
-            float v = id(ha_co2_mgl).state;
+            float v = (id(tank) ? id(ha1_co2_mgl) : id(ha_co2_mgl))->state;
             return isnan(v) ? std::string("--") : str_sprintf("%.0f", v);
           text_color: !lambda |-
-            return id(ha_out_of_range).state.find("co2") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
+            return (id(tank) ? id(ha1_out_of_range) : id(ha_out_of_range))->state.find("co2") != std::string::npos ? lv_color_hex(0xFF7A3D) : lv_color_hex(0xFFFFFF);
       # "zuletzt 12.10." or "neu"
       - lambda: |-
           auto sub = [](const std::string &pend, const std::string &date) -> std::string {
@@ -720,12 +547,12 @@ script:
             if (date.size() < 10) return "noch nie";
             return "zuletzt " + date.substr(8, 2) + "." + date.substr(5, 2) + ".";
           };
-          id(wt_sub)[0] = sub(id(pending)[0], id(ha_ph_date).state);
-          id(wt_sub)[1] = sub(id(pending)[1], id(ha_kh_date).state);
-          id(wt_sub)[2] = sub(id(pending)[2], id(ha_no2_date).state);
-          id(wt_sub)[3] = sub(id(pending)[3], id(ha_no3_date).state);
-          id(wt_sub)[4] = sub(id(pending)[4], id(ha_nh4_date).state);
-          id(wt_sub)[5] = sub("", id(ha_co2_date).state);
+          id(wt_sub)[0] = sub(id(pending)[0], (id(tank) ? id(ha1_ph_date) : id(ha_ph_date))->state);
+          id(wt_sub)[1] = sub(id(pending)[1], (id(tank) ? id(ha1_kh_date) : id(ha_kh_date))->state);
+          id(wt_sub)[2] = sub(id(pending)[2], (id(tank) ? id(ha1_no2_date) : id(ha_no2_date))->state);
+          id(wt_sub)[3] = sub(id(pending)[3], (id(tank) ? id(ha1_no3_date) : id(ha_no3_date))->state);
+          id(wt_sub)[4] = sub(id(pending)[4], (id(tank) ? id(ha1_nh4_date) : id(ha_nh4_date))->state);
+          id(wt_sub)[5] = sub("", (id(tank) ? id(ha1_co2_date) : id(ha_co2_date))->state);
       - lvgl.label.update: {id: wt_ph_sub, text: !lambda "return id(wt_sub)[0];"}
       - lvgl.label.update: {id: wt_kh_sub, text: !lambda "return id(wt_sub)[1];"}
       - lvgl.label.update: {id: wt_no2_sub, text: !lambda "return id(wt_sub)[2];"}
@@ -804,7 +631,7 @@ script:
       # start at the new value if one was picked, else at the last test, else at a typical value
       - lambda: |-
           static const int fallback[] = {10, 6, 0, 4, 0};
-          sensor::Sensor *last[] = {id(ha_ph), id(ha_kh), id(ha_no2), id(ha_no3), id(ha_nh4)};
+          sensor::Sensor *last[] = {(id(tank) ? id(ha1_ph) : id(ha_ph)), (id(tank) ? id(ha1_kh) : id(ha_kh)), (id(tank) ? id(ha1_no2) : id(ha_no2)), (id(tank) ? id(ha1_no3) : id(ha_no3)), (id(tank) ? id(ha1_nh4) : id(ha_nh4))};
           float target = id(pending)[p].empty() ? last[p]->state : atof(id(pending)[p].c_str());
           auto *roller = id(ed_roller);
           const auto &opts = roller->get_options();
@@ -821,14 +648,27 @@ script:
 
   - id: save_water_test
     then:
-      - homeassistant.action:
-          action: script.aquarium_wasserwerte_vom_tablet
-          data:
-            ph: !lambda return id(pending)[0];
-            kh: !lambda return id(pending)[1];
-            no2: !lambda return id(pending)[2];
-            no3: !lambda return id(pending)[3];
-            nh4: !lambda return id(pending)[4];
+      - if:
+          condition:
+            lambda: return id(tank) == 1;
+          then:
+            - homeassistant.action:
+                action: script.aquarium1_wasserwerte_vom_tablet
+                data:
+                  ph: !lambda return id(pending)[0];
+                  kh: !lambda return id(pending)[1];
+                  no2: !lambda return id(pending)[2];
+                  no3: !lambda return id(pending)[3];
+                  nh4: !lambda return id(pending)[4];
+          else:
+            - homeassistant.action:
+                action: script.aquarium_wasserwerte_vom_tablet
+                data:
+                  ph: !lambda return id(pending)[0];
+                  kh: !lambda return id(pending)[1];
+                  no2: !lambda return id(pending)[2];
+                  no3: !lambda return id(pending)[3];
+                  nh4: !lambda return id(pending)[4];
       - lambda: |-
           for (auto &p : id(pending)) p.clear();
       - lvgl.widget.update: {id: wt_save, bg_color: 0x121212}
@@ -845,7 +685,7 @@ script:
       - lvgl.label.update:
           id: ww_liters
           text: !lambda |-
-            float vol = id(ha_volume).state;
+            float vol = (id(tank) ? id(ha1_volume) : id(ha_volume))->state;
             if (isnan(vol) || vol <= 0) return std::string("");
             return str_sprintf("= %.0f %% von %.0f L", id(ww_liter) / vol * 100.0f, vol);
       - lvgl.widget.update:
@@ -870,16 +710,16 @@ script:
       - lvgl.label.update:
           id: ww_last
           text: !lambda |-
-            auto &t = id(ha_last_ww_time).state;
-            float liter = id(ha_last_ww).state;
-            float pct = id(ha_last_ww_pct).state;
+            auto &t = (id(tank) ? id(ha1_last_ww_time) : id(ha_last_ww_time))->state;
+            float liter = (id(tank) ? id(ha1_last_ww) : id(ha_last_ww))->state;
+            float pct = (id(tank) ? id(ha1_last_ww_pct) : id(ha_last_ww_pct))->state;
             if (t.size() < 10 || isnan(liter)) return std::string("Letzter: noch keiner erfasst");
             return "Letzter: " + t.substr(8, 2) + "." + t.substr(5, 2) + "." + t.substr(0, 4) +
                    str_sprintf(" mit %.1f L", liter) + (isnan(pct) ? std::string("") : str_sprintf(" (%.0f %%)", pct));
       - lvgl.label.update:
           id: ww_next
           text: !lambda |-
-            float d = id(ha_water_change_due).state;
+            float d = (id(tank) ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
             if (isnan(d)) return std::string("Nächster: --");
             int n = (int) d;
             if (n > 1) return str_sprintf("Nächster: in %d Tagen", n);
@@ -887,7 +727,7 @@ script:
             if (n == 0) return std::string("Nächster: heute");
             return str_sprintf("Nächster: seit %d %s fällig", -n, n == -1 ? "Tag" : "Tagen");
           text_color: !lambda |-
-            float d = id(ha_water_change_due).state;
+            float d = (id(tank) ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
             return (!isnan(d) && d <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
       - lvgl.label.update:
           id: ww_save_label
@@ -896,14 +736,175 @@ script:
   - id: save_water_change
     mode: single
     then:
-      - homeassistant.action:
-          action: script.aquarium_wasserwechsel_vom_tablet
-          data:
-            liter: !lambda return str_sprintf("%.1f", id(ww_liter));
+      - if:
+          condition:
+            lambda: return id(tank) == 1;
+          then:
+            - homeassistant.action:
+                action: script.aquarium1_wasserwechsel_vom_tablet
+                data:
+                  liter: !lambda return str_sprintf("%.1f", id(ww_liter));
+          else:
+            - homeassistant.action:
+                action: script.aquarium_wasserwechsel_vom_tablet
+                data:
+                  liter: !lambda return str_sprintf("%.1f", id(ww_liter));
       - lambda: id(ww_touched) = false;
       - lvgl.label.update: {id: ww_save_label, text: "Gespeichert"}
       - delay: 3s
       - script.execute: refresh_ww
+
+  # Hardware (Licht, CO2, Pumpe, Monitor, Leistung) gibt es vorerst nur für Becken 0.
+  # Bei Becken 1 zeigen die Kacheln "--" und die Steuerung ist gesperrt.
+  - id: refresh_hw
+    then:
+      - lvgl.label.update:
+          id: ov_water_temp
+          text: !lambda |-
+            float x = id(ha_water_temp).state;
+            return (id(tank) != 0 || isnan(x)) ? std::string("--") : str_sprintf("%.1f", x);
+      - lvgl.label.update:
+          id: ov_tds
+          text: !lambda |-
+            float x = id(ha_tds).state;
+            return (id(tank) != 0 || isnan(x)) ? std::string("--") : str_sprintf("%.0f", x);
+      - lvgl.label.update:
+          id: ov_tds_rise
+          text: !lambda |-
+            if (id(tank) != 0) return std::string("Sensoren folgen");
+            float x = id(ha_tds_rise).state;
+            if (isnan(x)) return std::string("Seit Wasserwechsel: --");
+            return str_sprintf("Seit Wasserwechsel: %+.0f %%", x);
+      - lvgl.label.update:
+          id: ov_power
+          text: !lambda |-
+            float x = id(ha_power).state;
+            if (id(tank) != 0 || isnan(x)) return std::string("--");
+            return x < 10 ? str_sprintf("%.1f", x) : str_sprintf("%.0f", x);
+      - script.execute: refresh_room
+      # Geräte: Akzent = an, grau = aus, orange = Pumpe aus (ungewöhnlich)
+      - lambda: |-
+          struct Dev { binary_sensor::BinarySensor *ha; lv_obj_t *ov_icon, *ov_state, *ctl_icon, *ctl_state; bool warn_off; };
+          const Dev devs[] = {
+            {id(ha_light), id(ov_light_icon), id(ov_light_state), id(ctl_light_icon), id(ctl_light_state), false},
+            {id(ha_co2), id(ov_co2_icon), id(ov_co2_state), id(ctl_co2_icon), id(ctl_co2_state), false},
+            {id(ha_pump), id(ov_pump_icon), id(ov_pump_state), id(ctl_pump_icon), id(ctl_pump_state), true},
+          };
+          for (auto &d : devs) {
+            uint32_t icon, text;
+            const char *ov, *ctl;
+            if (id(tank) != 0) {
+              icon = 0x5C5C5C; text = 0x8C8C8C; ov = "--"; ctl = "Noch nicht eingebunden";
+            } else if (d.ha->state) {
+              icon = 0xD9A920; text = 0xFFFFFF; ov = "An"; ctl = "Eingeschaltet";
+            } else {
+              icon = d.warn_off ? 0xFF7A3D : 0x5C5C5C; text = d.warn_off ? 0xFF7A3D : 0x8C8C8C;
+              ov = "Aus"; ctl = "Ausgeschaltet";
+            }
+            lv_obj_set_style_text_color(d.ov_icon, lv_color_hex(icon), LV_PART_MAIN);
+            lv_obj_set_style_text_color(d.ctl_icon, lv_color_hex(icon), LV_PART_MAIN);
+            lv_obj_set_style_text_color(d.ov_state, lv_color_hex(text), LV_PART_MAIN);
+            lv_label_set_text(d.ov_state, ov);
+            lv_label_set_text(d.ctl_state, ctl);
+          }
+          lv_obj_t *sw[] = {id(ctl_light_switch), id(ctl_co2_switch), id(ctl_pump_switch)};
+          for (int i = 0; i < 3; i++) {
+            if (id(tank) == 0 && devs[i].ha->state) lv_obj_add_state(sw[i], LV_STATE_CHECKED);
+            else lv_obj_clear_state(sw[i], LV_STATE_CHECKED);
+          }
+
+  # Kopfzeile: Kurzname des aktiven Beckens (letztes Wort, z. B. "30L")
+  - id: refresh_header
+    then:
+      - lvgl.label.update:
+          id: hdr_tank
+          text: !lambda |-
+            auto &nm = (id(tank) ? id(ha1_name) : id(ha_name))->state;
+            if (nm.empty() || nm == "unknown") return std::string(id(tank) ? "2" : "1");
+            size_t p = nm.find_last_of(' ');
+            return p == std::string::npos ? nm : nm.substr(p + 1);
+
+  # Startseite: Name, Wasserwechsel, nächste Zugabe und Status je Becken
+  - id: refresh_start
+    then:
+      - lambda: |-
+          auto days = [](int n, bool known) -> std::string {
+            if (!known) return "--";
+            if (n > 1) return str_sprintf("in %d Tagen", n);
+            if (n == 1) return "morgen";
+            if (n == 0) return "heute";
+            return n == -1 ? std::string("seit 1 Tag fällig") : str_sprintf("seit %d Tagen fällig", -n);
+          };
+          struct T {
+            text_sensor::TextSensor *name, *product; sensor::Sensor *due, *oor;
+            lv_obj_t *l_name, *l_ww, *l_dose, *l_icon, *l_status; const char *fallback;
+          };
+          const T tanks[] = {
+            {id(ha_name), id(ha_next_dose_product), id(ha_water_change_due), id(ha_out_of_range_count),
+             id(st0_name), id(st0_ww), id(st0_dose), id(st0_status_icon), id(st0_status), "Becken 1"},
+            {id(ha1_name), id(ha1_next_dose_product), id(ha1_water_change_due), id(ha1_out_of_range_count),
+             id(st1_name), id(st1_ww), id(st1_dose), id(st1_status_icon), id(st1_status), "Becken 2"},
+          };
+          for (int t = 0; t < 2; t++) {
+            auto &k = tanks[t];
+            std::string nm = k.name->state;
+            lv_label_set_text(k.l_name, (nm.empty() || nm == "unknown") ? k.fallback : nm.c_str());
+
+            float due = k.due->state;
+            bool ww_due = !isnan(due) && due <= 0;
+            std::string ww = "Wasserwechsel " + days((int) due, !isnan(due));
+            lv_label_set_text(k.l_ww, ww.c_str());
+            lv_obj_set_style_text_color(k.l_ww, lv_color_hex(ww_due ? 0xFF7A3D : 0xFFFFFF), LV_PART_MAIN);
+
+            int dd = id(dose_days)[t];
+            std::string pr = k.product->state;
+            if (pr.empty() || pr == "unknown") pr = "Zugabe";
+            std::string dose = pr + " " + days(dd, dd != INT_MIN);
+            lv_label_set_text(k.l_dose, dose.c_str());
+            lv_obj_set_style_text_color(k.l_dose, lv_color_hex((dd != INT_MIN && dd <= 0) ? 0xFF7A3D : 0xFFFFFF), LV_PART_MAIN);
+
+            // Status: TDS (nur Becken 0) > Werte ausser Soll > ok
+            std::string st; uint32_t col; const char *icon;
+            int oor = isnan(k.oor->state) ? 0 : (int) k.oor->state;
+            if (t == 0 && id(ha_tds_jump).state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; icon = "\U000F0026"; }
+            else if (t == 0 && id(ha_tds_high).state) { st = "TDS zu hoch"; col = 0xFF7A3D; icon = "\U000F0026"; }
+            else if (oor >= 1) { st = oor == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", oor); col = 0xFF7A3D; icon = "\U000F0026"; }
+            else { st = "Alles in Ordnung"; col = 0x4CAF50; icon = "\U000F05E1"; }
+            lv_label_set_text(k.l_status, st.c_str());
+            lv_label_set_text(k.l_icon, icon);
+            lv_obj_set_style_text_color(k.l_icon, lv_color_hex(col), LV_PART_MAIN);
+          }
+
+  - id: show_start
+    then:
+      - lvgl.widget.hide: ed_overlay
+      - lvgl.widget.hide: hdr_nav
+      - lvgl.widget.show: hdr_title
+      - lvgl.page.show: page_start
+      - script.execute: refresh_dose
+
+  # Becken öffnen: aktives Becken setzen, offene Eingaben verwerfen, alles neu zeichnen
+  - id: open_tank
+    parameters:
+      n: int
+    then:
+      - lambda: |-
+          id(tank) = n;
+          for (auto &p : id(pending)) p.clear();
+          id(ww_touched) = false;
+          float d = (n ? id(ha1_ww_default) : id(ha_ww_default))->state;
+          id(ww_liter) = (!isnan(d) && d > 0) ? d : 5.0f;
+      - script.execute: refresh_header
+      - script.execute: refresh_hw
+      - script.execute: refresh_status
+      - script.execute: refresh_water_change
+      - script.execute: refresh_dose
+      - script.execute: refresh_water
+      - script.execute: refresh_ww
+      - script.execute: show_water_values
+      - lvgl.widget.hide: hdr_title
+      - lvgl.widget.show: hdr_nav
+      - script.execute: show_overview
 
   - id: show_water_values
     then:
@@ -931,7 +932,7 @@ script:
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_water, text_color: 0x5C5C5C}
-      - lvgl.widget.update: {id: hdr_underline, x: 16}
+      - lvgl.widget.update: {id: hdr_underline, x: 92}
 
   - id: show_control
     then:
@@ -940,7 +941,7 @@ script:
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_water, text_color: 0x5C5C5C}
-      - lvgl.widget.update: {id: hdr_underline, x: 124}
+      - lvgl.widget.update: {id: hdr_underline, x: 200}
 
   - id: show_water
     then:
@@ -949,7 +950,7 @@ script:
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_water, text_color: 0xFFFFFF}
-      - lvgl.widget.update: {id: hdr_underline, x: 236}
+      - lvgl.widget.update: {id: hdr_underline, x: 312}
 
 # ---------------------------------------------------------------------------
 # UI: dark, black/white, accent only for "on", "new" and warnings
@@ -979,7 +980,8 @@ lvgl:
       pressed:
         bg_color: 0x1E1E1E
 
-  # header with page tabs and clock, shown on every page
+  # header, shown on every page: title on the start page, inside a tank the
+  # back button (with the short tank name) and the page tabs; clock on the right
   top_layer:
     widgets:
       - obj:
@@ -990,50 +992,74 @@ lvgl:
           radius: 0
           bg_color: 0x000000
           widgets:
-            - button:
+            - label: {id: hdr_title, x: 16, y: 18, text: "Aquarien", text_color: 0xFFFFFF}
+            - obj:
+                id: hdr_nav
+                hidden: true
                 x: 0
                 y: 0
-                width: 112
+                width: 400
                 height: 56
+                radius: 0
                 bg_opa: TRANSP
-                pressed:
-                  bg_opa: TRANSP
-                on_click:
-                  - script.execute: show_overview
                 widgets:
-                  - label: {id: hdr_tab_overview, x: 16, y: 18, text: "Übersicht", text_color: 0xFFFFFF}
-            - button:
-                x: 112
-                y: 0
-                width: 112
-                height: 56
-                bg_opa: TRANSP
-                pressed:
-                  bg_opa: TRANSP
-                on_click:
-                  - script.execute: show_control
-                widgets:
-                  - label: {id: hdr_tab_control, x: 12, y: 18, text: "Steuerung", text_color: 0x5C5C5C}
-            - button:
-                x: 224
-                y: 0
-                width: 96
-                height: 56
-                bg_opa: TRANSP
-                pressed:
-                  bg_opa: TRANSP
-                on_click:
-                  - script.execute: show_water
-                widgets:
-                  - label: {id: hdr_tab_water, x: 12, y: 18, text: "Wasser", text_color: 0x5C5C5C}
-            - obj:
-                id: hdr_underline
-                x: 16
-                y: 46
-                width: 24
-                height: 3
-                radius: 2
-                bg_color: 0xD9A920
+                  - button:
+                      x: 0
+                      y: 0
+                      width: 76
+                      height: 56
+                      bg_opa: TRANSP
+                      pressed:
+                        bg_opa: TRANSP
+                      on_click:
+                        - script.execute: show_start
+                      widgets:
+                        - label: {x: 8, y: 16, text: "\U000F0141", text_font: mdi_24, text_color: 0x8C8C8C}
+                        - label: {id: hdr_tank, x: 32, y: 20, text: "", text_font: inter_14, text_color: 0xD9A920}
+                  - button:
+                      x: 76
+                      y: 0
+                      width: 112
+                      height: 56
+                      bg_opa: TRANSP
+                      pressed:
+                        bg_opa: TRANSP
+                      on_click:
+                        - script.execute: show_overview
+                      widgets:
+                        - label: {id: hdr_tab_overview, x: 16, y: 18, text: "Übersicht", text_color: 0xFFFFFF}
+                  - button:
+                      x: 188
+                      y: 0
+                      width: 112
+                      height: 56
+                      bg_opa: TRANSP
+                      pressed:
+                        bg_opa: TRANSP
+                      on_click:
+                        - script.execute: show_control
+                      widgets:
+                        - label: {id: hdr_tab_control, x: 12, y: 18, text: "Steuerung", text_color: 0x5C5C5C}
+                  - button:
+                      x: 300
+                      y: 0
+                      width: 96
+                      height: 56
+                      bg_opa: TRANSP
+                      pressed:
+                        bg_opa: TRANSP
+                      on_click:
+                        - script.execute: show_water
+                      widgets:
+                        - label: {id: hdr_tab_water, x: 12, y: 18, text: "Wasser", text_color: 0x5C5C5C}
+                  - obj:
+                      id: hdr_underline
+                      x: 92
+                      y: 46
+                      width: 24
+                      height: 3
+                      radius: 2
+                      bg_color: 0xD9A920
             - label:
                 id: hdr_clock
                 align: TOP_RIGHT
@@ -1043,6 +1069,41 @@ lvgl:
                 text_color: 0x8C8C8C
 
   pages:
+    # ---------------------------------------------------------------- Start
+    # pro Becken ein Button, öffnet die Seiten unten für dieses Becken
+    - id: page_start
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - button:
+            x: 16
+            y: 68
+            width: 448
+            height: 188
+            on_click:
+              - script.execute: {id: open_tank, n: 0}
+            widgets:
+              - label: {id: st0_name, x: 20, y: 18, width: 360, long_mode: DOT, text: "--", text_font: inter_22}
+              - label: {x: 404, y: 18, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
+              - label: {id: st0_ww, x: 20, y: 66, width: 408, long_mode: DOT, text: "Wasserwechsel --"}
+              - label: {id: st0_dose, x: 20, y: 98, width: 408, long_mode: DOT, text: "Zugabe --"}
+              - label: {id: st0_status_icon, x: 20, y: 140, text: "\U000F05E1", text_font: mdi_24, text_color: 0x5C5C5C}
+              - label: {id: st0_status, x: 56, y: 142, width: 372, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+        - button:
+            x: 16
+            y: 272
+            width: 448
+            height: 188
+            on_click:
+              - script.execute: {id: open_tank, n: 1}
+            widgets:
+              - label: {id: st1_name, x: 20, y: 18, width: 360, long_mode: DOT, text: "--", text_font: inter_22}
+              - label: {x: 404, y: 18, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
+              - label: {id: st1_ww, x: 20, y: 66, width: 408, long_mode: DOT, text: "Wasserwechsel --"}
+              - label: {id: st1_dose, x: 20, y: 98, width: 408, long_mode: DOT, text: "Zugabe --"}
+              - label: {id: st1_status_icon, x: 20, y: 140, text: "\U000F05E1", text_font: mdi_24, text_color: 0x5C5C5C}
+              - label: {id: st1_status, x: 56, y: 142, width: 372, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview
       bg_color: 0x000000
@@ -1171,10 +1232,14 @@ lvgl:
             width: 448
             height: 92
             on_click:
-              - homeassistant.action:
-                  action: homeassistant.toggle
-                  data:
-                    entity_id: ${light_entity}
+              - if:
+                  condition:
+                    lambda: return id(tank) == 0;
+                  then:
+                    - homeassistant.action:
+                        action: homeassistant.toggle
+                        data:
+                          entity_id: ${light_entity}
             widgets:
               - obj:
                   x: 20
@@ -1209,10 +1274,14 @@ lvgl:
             width: 448
             height: 92
             on_click:
-              - homeassistant.action:
-                  action: homeassistant.toggle
-                  data:
-                    entity_id: ${co2_entity}
+              - if:
+                  condition:
+                    lambda: return id(tank) == 0;
+                  then:
+                    - homeassistant.action:
+                        action: homeassistant.toggle
+                        data:
+                          entity_id: ${co2_entity}
             widgets:
               - obj:
                   x: 20
@@ -1247,10 +1316,14 @@ lvgl:
             width: 448
             height: 92
             on_click:
-              - homeassistant.action:
-                  action: homeassistant.toggle
-                  data:
-                    entity_id: ${pump_entity}
+              - if:
+                  condition:
+                    lambda: return id(tank) == 0;
+                  then:
+                    - homeassistant.action:
+                        action: homeassistant.toggle
+                        data:
+                          entity_id: ${pump_entity}
             widgets:
               - obj:
                   x: 20
@@ -1443,7 +1516,7 @@ lvgl:
                   widgets:
                     - label: {id: wt_save_label, align: CENTER, text: "Wert antippen zum Erfassen", text_font: inter_22, text_color: 0x5C5C5C}
 
-        # -------- Wasserwechsel: Schnellwahl oder -/+ in 5 %-Schritten
+        # -------- Wasserwechsel: Schnellwahl oder -/+ in 0,5-L-Schritten
         - obj:
             id: ww_view
             hidden: true
@@ -1499,7 +1572,7 @@ lvgl:
                         bg_color: 0x1E1E1E
                         on_click:
                           - lambda: |-
-                              float vol = id(ha_volume).state;
+                              float vol = (id(tank) ? id(ha1_volume) : id(ha_volume))->state;
                               float max_l = (isnan(vol) || vol <= 0) ? 200.0f : vol;
                               id(ww_liter) = std::min(max_l, id(ww_liter) + 0.5f);
                               id(ww_touched) = true;

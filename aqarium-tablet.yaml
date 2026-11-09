@@ -7,6 +7,8 @@ substitutions:
   water_temp_entity: sensor.aquarium_aquarium_monitor_water_temperature
   tds_entity: sensor.aquarium_aquarium_monitor_tds
   tds_rise_entity: sensor.aquarium_aquarium_monitor_tds_rise_since_water_change
+  # Veränderung der Wassertemperatur seit 24 h (HA packages/aquarium_monitor.yaml)
+  water_temp_24h_entity: sensor.aquarium_wassertemperatur_anderung_24h
   tds_jump_entity: binary_sensor.aquarium_aquarium_monitor_tds_jump
   tds_high_entity: binary_sensor.aquarium_aquarium_monitor_water_change_recommended
   room_temp_entity: sensor.aquarium_aquarium_monitor_temperature
@@ -399,6 +401,12 @@ sensor:
     entity_id: ${tds_rise_entity}
     on_value:
       - script.execute: refresh_hw
+      - script.execute: refresh_start_values
+
+  - platform: homeassistant
+    id: ha_water_temp_24h
+    entity_id: ${water_temp_24h_entity}
+    on_value:
       - script.execute: refresh_start_values
 
   - platform: homeassistant
@@ -958,14 +966,21 @@ script:
           }
 
   # Startseite: Wassertemperatur und TDS oben rechts (nur Becken 0 hat den Monitor).
-  # TDS mit Anstieg seit dem Wasserwechsel, ab 25 % orange (wie die HA-Karte)
+  # Zeile 1 Temperatur, Zeile 2 Änderung seit 24 h und TDS mit Anstieg seit dem
+  # Wasserwechsel (ab 25 % orange, wie die HA-Karte)
   - id: refresh_start_values
     then:
       - lambda: |-
-          float t = id(ha_water_temp).state, d = id(ha_tds).state, r = id(ha_tds_rise).state;
+          float t = id(ha_water_temp).state, t24 = id(ha_water_temp_24h).state;
+          float d = id(ha_tds).state, r = id(ha_tds_rise).state;
           std::string ts = isnan(t) ? "" : str_sprintf("%.1f °C", t);
-          std::string ds = isnan(d) ? "" : str_sprintf("%.0f ppm", d);
-          if (!isnan(d) && !isnan(r)) ds += str_sprintf(" · %+.0f %%", r);
+          std::string ds;
+          if (!isnan(t24)) ds = str_sprintf("%+.1f° 24h", fabsf(t24) < 0.05f ? 0.f : t24);
+          if (!isnan(d)) {
+            if (!ds.empty()) ds += " · ";
+            ds += str_sprintf("%.0f ppm", d);
+            if (!isnan(r)) ds += str_sprintf(" %+.0f %%", r);
+          }
           lv_label_set_text(id(st0_temp), ts.c_str());
           lv_label_set_text(id(st0_tds), ds.c_str());
           lv_obj_set_style_text_color(id(st0_tds), lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
@@ -1205,7 +1220,7 @@ lvgl:
   pages:
     # ---------------------------------------------------------------- Start
     # pro Becken eine Karte (Garnelen links, Plants rechts): oben das Becken als
-    # animierter 8-Bit-Würfel (Canvas, gezeichnet im interval oben), darüber Name und
+    # animierter 8-Bit-Würfel (Canvas, 18 px unter der Kartenkante, gezeichnet im interval oben), darüber Name und
     # Messwerte, darunter Wasserwechsel, Zugabe und Status. Tippen öffnet das Becken,
     # langer Druck auf Lampe bzw. Diffusor schaltet Licht bzw. CO2 (Skript tank_touch).
     - id: page_start
@@ -1231,16 +1246,16 @@ lvgl:
             on_short_click:
               - script.execute: {id: open_tank, n: 0}
             widgets:
-              - canvas: {id: st0_canvas, x: 0, y: 0, width: 232, height: 324}
+              - canvas: {id: st0_canvas, x: 0, y: 18, width: 232, height: 324}
               - label: {id: st0_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
               - label: {id: st0_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
               - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st0_ww_dot, x: 12, y: 338, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_ww, x: 26, y: 331, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st0_dose_dot, x: 12, y: 360, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_dose, x: 26, y: 353, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st0_status_dot, x: 12, y: 382, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_status, x: 26, y: 375, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - obj: {id: st0_ww_dot, x: 12, y: 349, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_ww, x: 26, y: 342, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st0_dose_dot, x: 12, y: 370, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_dose, x: 26, y: 363, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st0_status_dot, x: 12, y: 391, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_status, x: 26, y: 384, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
         - button:
             x: 242
             y: 62
@@ -1260,16 +1275,16 @@ lvgl:
             on_short_click:
               - script.execute: {id: open_tank, n: 1}
             widgets:
-              - canvas: {id: st1_canvas, x: 0, y: 0, width: 232, height: 324}
+              - canvas: {id: st1_canvas, x: 0, y: 18, width: 232, height: 324}
               - label: {id: st1_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
               - label: {id: st1_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
               - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st1_ww_dot, x: 12, y: 338, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_ww, x: 26, y: 331, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st1_dose_dot, x: 12, y: 360, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_dose, x: 26, y: 353, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st1_status_dot, x: 12, y: 382, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_status, x: 26, y: 375, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - obj: {id: st1_ww_dot, x: 12, y: 349, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_ww, x: 26, y: 342, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st1_dose_dot, x: 12, y: 370, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_dose, x: 26, y: 363, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st1_status_dot, x: 12, y: 391, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_status, x: 26, y: 384, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
 
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview

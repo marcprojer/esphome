@@ -25,7 +25,7 @@ substitutions:
 
   # Startseite: Abstand zwischen zwei Bildern der Becken-Animation (100 ms = 10 Bilder/s).
   # Reagiert das Tablet auf der Startseite träge, auf 150 oder 200 erhöhen.
-  pixel_frame_ms: "100"
+  pixel_frame_ms: "200"
 
   # Display-Helligkeit in % (10-100)
   display_brightness: "100"
@@ -1481,13 +1481,13 @@ lvgl:
               - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
               - label: {id: st0_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
               - obj: {id: st0_ww_dot, x: 12, y: 351, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_ww, x: 26, y: 344, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - label: {id: st0_ww, x: 26, y: 344, width: 196, height: 18, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
               - obj: {id: st0_dose_dot, x: 12, y: 369, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_dose, x: 26, y: 362, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - label: {id: st0_dose, x: 26, y: 362, width: 196, height: 18, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
               - obj: {id: st0_food_dot, x: 12, y: 387, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_food, x: 26, y: 380, width: 196, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
+              - label: {id: st0_food, x: 26, y: 380, width: 196, height: 18, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
               - obj: {id: st0_status_dot, x: 12, y: 405, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_status, x: 26, y: 398, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - label: {id: st0_status, x: 26, y: 398, width: 196, height: 18, long_mode: DOT, text: "--", text_font: inter_14}
         - button:
             x: 242
             y: 56
@@ -1516,13 +1516,13 @@ lvgl:
               - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
               - label: {id: st1_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
               - obj: {id: st1_ww_dot, x: 12, y: 351, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_ww, x: 26, y: 344, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - label: {id: st1_ww, x: 26, y: 344, width: 196, height: 18, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
               - obj: {id: st1_dose_dot, x: 12, y: 369, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_dose, x: 26, y: 362, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - label: {id: st1_dose, x: 26, y: 362, width: 196, height: 18, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
               - obj: {id: st1_food_dot, x: 12, y: 387, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_food, x: 26, y: 380, width: 196, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
+              - label: {id: st1_food, x: 26, y: 380, width: 196, height: 18, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
               - obj: {id: st1_status_dot, x: 12, y: 405, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_status, x: 26, y: 398, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - label: {id: st1_status, x: 26, y: 398, width: 196, height: 18, long_mode: DOT, text: "--", text_font: inter_14}
 
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview

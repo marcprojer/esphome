@@ -177,8 +177,9 @@ class Tank {
             r += (pr - r) * a; g += (pg - g) * a; b += (pb - b) * a;
           }
         }
-        // blinkendes "!" links oben (Warnung oder Werte ausser Soll)
-        if (blink && x >= 6 && x < 8 && ((y >= 14 && y < 20) || (y >= 22 && y < 24))) { r = 255; g = 122; b = 61; }
+        // blinkendes "!" links oben (Warnung oder Werte ausser Soll); tiefer als in der
+        // HA-Karte, weil darüber auf dem Tablet die Temperatur steht
+        if (blink && x >= 6 && x < 8 && ((y >= 21 && y < 27) || (y >= 29 && y < 31))) { r = 255; g = 122; b = 61; }
         uint16_t c = pack(clamp(r), clamp(g), clamp(b));
         uint16_t *p = row + x * SCALE;
         p[0] = c; p[1] = c; p[stride] = c; p[stride + 1] = c;

@@ -965,25 +965,20 @@ script:
             lv_obj_set_style_bg_color(k.d_status, lv_color_hex(col), LV_PART_MAIN);
           }
 
-  # Startseite: Wassertemperatur und TDS oben rechts (nur Becken 0 hat den Monitor).
-  # Zeile 1 Temperatur, Zeile 2 Änderung seit 24 h und TDS mit Anstieg seit dem
-  # Wasserwechsel (ab 25 % orange, wie die HA-Karte)
+  # Startseite: Wassertemperatur und TDS unter dem Namen (nur Becken 0 hat den Monitor).
+  # Links Temperatur mit Änderung seit 24 h, rechts TDS mit Anstieg seit dem Wasserwechsel
+  # (ab 25 % orange, wie die HA-Karte). Wert weiss, Veränderung grau darunter.
   - id: refresh_start_values
     then:
       - lambda: |-
           float t = id(ha_water_temp).state, t24 = id(ha_water_temp_24h).state;
           float d = id(ha_tds).state, r = id(ha_tds_rise).state;
-          std::string ts = isnan(t) ? "" : str_sprintf("%.1f °C", t);
-          std::string ds;
-          if (!isnan(t24)) ds = str_sprintf("%+.1f° 24h", fabsf(t24) < 0.05f ? 0.f : t24);
-          if (!isnan(d)) {
-            if (!ds.empty()) ds += " · ";
-            ds += str_sprintf("%.0f ppm", d);
-            if (!isnan(r)) ds += str_sprintf(" %+.0f %%", r);
-          }
-          lv_label_set_text(id(st0_temp), ts.c_str());
-          lv_label_set_text(id(st0_tds), ds.c_str());
-          lv_obj_set_style_text_color(id(st0_tds), lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
+          if (!isnan(t24) && fabsf(t24) < 0.05f) t24 = 0;
+          lv_label_set_text(id(st0_temp), isnan(t) ? "" : str_sprintf("%.1f °C", t).c_str());
+          lv_label_set_text(id(st0_temp_d), (isnan(t) || isnan(t24)) ? "" : str_sprintf("%+.1f°", t24).c_str());
+          lv_label_set_text(id(st0_tds), isnan(d) ? "" : str_sprintf("%.0f ppm", d).c_str());
+          lv_label_set_text(id(st0_tds_d), (isnan(d) || isnan(r)) ? "" : str_sprintf("%+.0f %%", r).c_str());
+          lv_obj_set_style_text_color(id(st0_tds_d), lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
 
   # Startseite: Berührung eines Beckens. phase 0 = Druck, 1 = Loslassen, 2 = langer Druck.
   # Lampe bzw. Diffusor leuchten beim Drücken auf; ein langer Druck darauf schaltet
@@ -1220,7 +1215,7 @@ lvgl:
   pages:
     # ---------------------------------------------------------------- Start
     # pro Becken eine Karte (Garnelen links, Plants rechts): oben das Becken als
-    # animierter 8-Bit-Würfel (Canvas, 18 px unter der Kartenkante, gezeichnet im interval oben), darüber Name und
+    # animierter 8-Bit-Würfel (Canvas, 26 px unter der Kartenkante, gezeichnet im interval oben), darüber Name und
     # Messwerte, darunter Wasserwechsel, Zugabe und Status. Tippen öffnet das Becken,
     # langer Druck auf Lampe bzw. Diffusor schaltet Licht bzw. CO2 (Skript tank_touch).
     - id: page_start
@@ -1229,9 +1224,9 @@ lvgl:
       widgets:
         - button:
             x: 6
-            y: 62
+            y: 56
             width: 232
-            height: 412
+            height: 420
             radius: 12
             clip_corner: true
             bg_color: 0x05060A
@@ -1246,21 +1241,25 @@ lvgl:
             on_short_click:
               - script.execute: {id: open_tank, n: 0}
             widgets:
-              - canvas: {id: st0_canvas, x: 0, y: 18, width: 232, height: 324}
-              - label: {id: st0_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
-              - label: {id: st0_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
-              - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st0_ww_dot, x: 12, y: 349, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_ww, x: 26, y: 342, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st0_dose_dot, x: 12, y: 370, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_dose, x: 26, y: 363, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st0_status_dot, x: 12, y: 391, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_status, x: 26, y: 384, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - canvas: {id: st0_canvas, x: 0, y: 26, width: 232, height: 324}
+              - label: {id: st0_name, x: 10, y: 6, width: 212, long_mode: DOT, text: "--", text_font: inter_14}
+              # Messwerte wie in der HA-Karte: Wert weiss, darunter die Veränderung grau.
+              # Links Temperatur (24 h), rechts TDS (seit Wasserwechsel)
+              - label: {id: st0_temp, x: 10, y: 25, text: "", text_font: inter_14}
+              - label: {id: st0_temp_d, x: 10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
+              - label: {id: st0_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - obj: {id: st0_ww_dot, x: 12, y: 359, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_ww, x: 26, y: 352, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st0_dose_dot, x: 12, y: 380, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_dose, x: 26, y: 373, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st0_status_dot, x: 12, y: 401, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_status, x: 26, y: 394, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
         - button:
             x: 242
-            y: 62
+            y: 56
             width: 232
-            height: 412
+            height: 420
             radius: 12
             clip_corner: true
             bg_color: 0x05060A
@@ -1275,16 +1274,20 @@ lvgl:
             on_short_click:
               - script.execute: {id: open_tank, n: 1}
             widgets:
-              - canvas: {id: st1_canvas, x: 0, y: 18, width: 232, height: 324}
-              - label: {id: st1_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
-              - label: {id: st1_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
-              - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st1_ww_dot, x: 12, y: 349, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_ww, x: 26, y: 342, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st1_dose_dot, x: 12, y: 370, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_dose, x: 26, y: 363, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st1_status_dot, x: 12, y: 391, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_status, x: 26, y: 384, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - canvas: {id: st1_canvas, x: 0, y: 26, width: 232, height: 324}
+              - label: {id: st1_name, x: 10, y: 6, width: 212, long_mode: DOT, text: "--", text_font: inter_14}
+              # Messwerte wie in der HA-Karte: Wert weiss, darunter die Veränderung grau.
+              # Links Temperatur (24 h), rechts TDS (seit Wasserwechsel)
+              - label: {id: st1_temp, x: 10, y: 25, text: "", text_font: inter_14}
+              - label: {id: st1_temp_d, x: 10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
+              - label: {id: st1_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - obj: {id: st1_ww_dot, x: 12, y: 359, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_ww, x: 26, y: 352, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st1_dose_dot, x: 12, y: 380, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_dose, x: 26, y: 373, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st1_status_dot, x: 12, y: 401, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_status, x: 26, y: 394, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
 
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview

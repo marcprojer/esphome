@@ -192,7 +192,7 @@ text_sensor:
 
   - platform: homeassistant
     id: decke_homeoffice
-    entity_id: light.office_decke
+    entity_id: light.hue_enrave
     on_value:
       then:
         - lvgl.widget.update:
@@ -215,7 +215,7 @@ text_sensor:
 
   - platform: homeassistant
     id: spots_ho
-    entity_id: light.spots_ho
+    entity_id: light.spot_ho
     on_value:
       then:
         - lvgl.widget.update:
@@ -796,7 +796,7 @@ lvgl:
                       - homeassistant.action:
                           action: light.toggle
                           data:
-                            entity_id: light.office_decke
+                            entity_id: light.hue_enrave
               - button:
                   id: btn_2
                   grid_cell_column_pos: 1
@@ -815,7 +815,7 @@ lvgl:
                       - homeassistant.action:
                           action: light.toggle
                           data:
-                            entity_id: light.spots_ho
+                            entity_id: light.spot_ho
 
               - button:
                   id: btn_3

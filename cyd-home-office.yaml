@@ -284,7 +284,7 @@ text_sensor:
 
   - platform: homeassistant
     id: office_temperature
-    entity_id: sensor.office_messstation_office_temperature
+    entity_id: sensor.office_timmerflotte_office_temperatur
     on_value:
       then:
         - lvgl.label.update:

@@ -88,6 +88,33 @@ sensor:
       - script.execute: refresh_ww
 
 text_sensor:
+  # Tab "Pflege": Zusätze und Futtersorten als Zeilen "name|einheit|mehrzahl|schritt|info"
+  # und der Vorschlag (was fällig ist), aus packages/aquarium<s>_logbuch.yaml
+  - platform: homeassistant
+    id: ha${s}_care_zug
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: zugaben
+    on_value:
+      - script.execute: refresh_care
+  - platform: homeassistant
+    id: ha${s}_care_zug_vor
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: zugabe_vorschlag
+    on_value:
+      - script.execute: refresh_care
+  - platform: homeassistant
+    id: ha${s}_care_fut
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: futter
+    on_value:
+      - script.execute: refresh_care
+  - platform: homeassistant
+    id: ha${s}_care_fut_vor
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: futter_vorschlag
+    on_value:
+      - script.execute: refresh_care
+
   # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube Garnelen"
   - platform: homeassistant
     id: ha${s}_name

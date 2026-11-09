@@ -43,6 +43,8 @@ esphome:
   includes:
     - common/aquarium_pixel.h
     - common/aquarium_pixel_data.h
+    # Tab "Pflege": Zusätze und Futter
+    - common/aquarium_pflege.h
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -190,6 +192,28 @@ globals:
     initial_value: std::vector<int>(2, INT_MIN)
   # active tank: 0 = "aquarium" (Nano Cube Garnelen), 1 = "aquarium1" (Nano Cube Plants)
   - id: tank
+    type: int
+    initial_value: "0"
+  # Tab "Pflege", je [0] Zugabe und [1] Futter: vom Benutzer gewählter Eintrag
+  # ("" = Vorschlag aus HA), angezeigter Eintrag, dessen Schritt, Menge, Zeitpunkt
+  # des letzten Speicherns
+  - id: care_pick
+    type: std::vector<std::string>
+    initial_value: std::vector<std::string>(2)
+  - id: care_cur
+    type: std::vector<std::string>
+    initial_value: std::vector<std::string>(2)
+  - id: care_step
+    type: std::vector<float>
+    initial_value: std::vector<float>(2, 0.5f)
+  - id: care_val
+    type: std::vector<float>
+    initial_value: std::vector<float>(2, 1.0f)
+  - id: care_saved
+    type: std::vector<uint32_t>
+    initial_value: std::vector<uint32_t>(2, 0)
+  # Auswahl offen für: 0 = Zugabe, 1 = Futter
+  - id: care_kind
     type: int
     initial_value: "0"
   # Startseite sichtbar: nur dann laufen die Becken-Animationen
@@ -1020,6 +1044,7 @@ script:
     then:
       - lambda: id(start_visible) = true;
       - lvgl.widget.hide: ed_overlay
+      - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: hdr_nav
       - lvgl.widget.show: hdr_title
       - lvgl.page.show: page_start
@@ -1037,6 +1062,7 @@ script:
           id(ww_touched) = false;
           float d = (n ? id(ha1_ww_default) : id(ha_ww_default))->state;
           id(ww_liter) = (!isnan(d) && d > 0) ? d : 5.0f;
+          for (int k = 0; k < 2; k++) { id(care_pick)[k].clear(); id(care_val)[k] = 1.0f; }
       - script.execute: refresh_header
       - script.execute: refresh_hw
       - script.execute: refresh_status
@@ -1044,33 +1070,199 @@ script:
       - script.execute: refresh_dose
       - script.execute: refresh_water
       - script.execute: refresh_ww
-      - script.execute: show_water_values
+      - script.execute: refresh_care
+      - script.execute: {id: show_care, v: 0}
       - lvgl.widget.hide: hdr_title
       - lvgl.widget.show: hdr_nav
       - script.execute: show_overview
 
-  - id: show_water_values
+  # Tab "Pflege": Unter-Tab zeigen (0 Werte, 1 Wasserwechsel, 2 Zugabe, 3 Futter)
+  - id: show_care
+    parameters:
+      v: int
     then:
-      - lvgl.widget.hide: ww_view
-      - lvgl.widget.show: wt_values_view
-      - lvgl.widget.update: {id: wt_seg_values, bg_color: 0x2A2A2A}
-      - lvgl.widget.update: {id: wt_seg_change, bg_color: 0x121212}
-      - lvgl.label.update: {id: wt_seg_values_label, text_color: 0xFFFFFF}
-      - lvgl.label.update: {id: wt_seg_change_label, text_color: 0x8C8C8C}
+      - lambda: |-
+          lv_obj_t *views[4] = {id(wt_values_view), id(ww_view), id(zg_view), id(fu_view)};
+          lv_obj_t *segs[4] = {id(wt_seg_values), id(wt_seg_change), id(wt_seg_dose), id(wt_seg_food)};
+          lv_obj_t *lbls[4] = {id(wt_seg_values_label), id(wt_seg_change_label), id(wt_seg_dose_label), id(wt_seg_food_label)};
+          for (int i = 0; i < 4; i++) {
+            if (i == v) lv_obj_clear_flag(views[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(views[i], LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_style_bg_color(segs[i], lv_color_hex(i == v ? 0x2A2A2A : 0x121212), LV_PART_MAIN);
+            lv_obj_set_style_text_color(lbls[i], lv_color_hex(i == v ? 0xFFFFFF : 0x8C8C8C), LV_PART_MAIN);
+          }
+      - if:
+          condition:
+            lambda: return v == 1;
+          then:
+            - script.execute: refresh_ww
+      - if:
+          condition:
+            lambda: return v >= 2;
+          then:
+            - script.execute: refresh_care
 
-  - id: show_water_change
+  # Tab "Pflege", Zugabe und Futter: Eintrag (gewählt oder Vorschlag aus HA), Info,
+  # Menge mit Einheit, Schnellwahl und Speichern-Knopf für das aktive Becken
+  - id: refresh_care
     then:
-      - lvgl.widget.hide: wt_values_view
-      - lvgl.widget.show: ww_view
-      - lvgl.widget.update: {id: wt_seg_values, bg_color: 0x121212}
-      - lvgl.widget.update: {id: wt_seg_change, bg_color: 0x2A2A2A}
-      - lvgl.label.update: {id: wt_seg_values_label, text_color: 0x8C8C8C}
-      - lvgl.label.update: {id: wt_seg_change_label, text_color: 0xFFFFFF}
-      - script.execute: refresh_ww
+      - lambda: |-
+          bool t1 = id(tank) == 1;
+          struct V {
+            text_sensor::TextSensor *list, *vor;
+            lv_obj_t *name, *info, *val, *unit, *save;
+            lv_obj_t *chip[5], *chipl[5];
+            const char *save_txt;
+          };
+          const V vs[2] = {
+            {t1 ? id(ha1_care_zug) : id(ha_care_zug), t1 ? id(ha1_care_zug_vor) : id(ha_care_zug_vor),
+             id(zg_name), id(zg_info), id(zg_val), id(zg_unit), id(zg_save_label),
+             {id(zg_chip_1), id(zg_chip_2), id(zg_chip_3), id(zg_chip_4), id(zg_chip_5)},
+             {id(zg_chip_1_label), id(zg_chip_2_label), id(zg_chip_3_label), id(zg_chip_4_label), id(zg_chip_5_label)},
+             "Zugabe speichern"},
+            {t1 ? id(ha1_care_fut) : id(ha_care_fut), t1 ? id(ha1_care_fut_vor) : id(ha_care_fut_vor),
+             id(fu_name), id(fu_info), id(fu_val), id(fu_unit), id(fu_save_label),
+             {id(fu_chip_1), id(fu_chip_2), id(fu_chip_3), id(fu_chip_4), id(fu_chip_5)},
+             {id(fu_chip_1_label), id(fu_chip_2_label), id(fu_chip_3_label), id(fu_chip_4_label), id(fu_chip_5_label)},
+             "Fütterung speichern"},
+          };
+          for (int k = 0; k < 2; k++) {
+            auto &v = vs[k];
+            auto items = aqcare::parse(v.list->state);
+            int i = aqcare::find(items, id(care_pick)[k]);
+            if (i < 0) i = aqcare::find(items, v.vor->state);
+            if (i < 0 && !items.empty()) i = 0;
+            float val = id(care_val)[k];
+            if (i < 0) {
+              id(care_cur)[k].clear();
+              lv_label_set_text(v.name, "--");
+              lv_label_set_text(v.info, k ? "Kein Futter in einstellungen.yaml" : "Keine Zusätze in einstellungen.yaml");
+              lv_label_set_text(v.unit, "");
+            } else {
+              auto &it = items[i];
+              id(care_cur)[k] = it.name;
+              id(care_step)[k] = it.step;
+              bool vorschlag = it.name == v.vor->state;
+              lv_label_set_text(v.name, it.name.c_str());
+              lv_label_set_text(v.info, it.info.c_str());
+              lv_obj_set_style_text_color(v.info, lv_color_hex(vorschlag ? 0xD9A920 : 0x8C8C8C), LV_PART_MAIN);
+              lv_label_set_text(v.unit, (val > 1 ? it.unitn : it.unit1).c_str());
+            }
+            lv_label_set_text(v.val, aqcare::fmt(val).c_str());
+            const float *c = aqcare::chips(i < 0 ? std::string("") : items[i].unit1);
+            for (int j = 0; j < 5; j++) {
+              bool on = fabsf(c[j] - val) < 0.01f;
+              lv_label_set_text(v.chipl[j], aqcare::fmt(c[j]).c_str());
+              lv_obj_set_style_bg_color(v.chip[j], lv_color_hex(on ? 0xD9A920 : 0x121212), LV_PART_MAIN);
+              lv_obj_set_style_text_color(v.chipl[j], lv_color_hex(on ? 0x000000 : 0xFFFFFF), LV_PART_MAIN);
+            }
+            bool saved = id(care_saved)[k] && millis() - id(care_saved)[k] < 3000;
+            lv_label_set_text(v.save, saved ? "Gespeichert" : v.save_txt);
+          }
+
+  # Menge ändern: d = +1/-1 Schritt (0.25 bzw. 0.5), sonst direkt auf "wert" (Schnellwahl)
+  - id: care_amount
+    parameters:
+      k: int
+      d: int
+      wert: float
+    then:
+      - lambda: |-
+          float st = id(care_step)[k];
+          float x = d ? id(care_val)[k] + d * st : wert;
+          id(care_val)[k] = std::min(50.0f, std::max(st, x));
+      - script.execute: refresh_care
+
+  # Auswahl öffnen (Roller mit allen Zusätzen bzw. Futtersorten)
+  - id: open_picker
+    parameters:
+      k: int
+    then:
+      - lambda: |-
+          id(care_kind) = k;
+          bool t1 = id(tank) == 1;
+          auto &raw = (k ? (t1 ? id(ha1_care_fut) : id(ha_care_fut)) : (t1 ? id(ha1_care_zug) : id(ha_care_zug)))->state;
+          auto items = aqcare::parse(raw);
+          std::string opts = aqcare::options(items);
+          lv_roller_set_options(id(pk_roller)->obj, opts.c_str(), LV_ROLLER_MODE_NORMAL);
+          int i = aqcare::find(items, id(care_cur)[k]);
+          lv_roller_set_selected(id(pk_roller)->obj, i < 0 ? 0 : i, LV_ANIM_OFF);
+          lv_label_set_text(id(pk_title), k ? "Futter wählen" : "Zusatz wählen");
+      - lvgl.widget.show: pk_overlay
+
+  - id: pick_apply
+    then:
+      - lambda: |-
+          int k = id(care_kind);
+          bool t1 = id(tank) == 1;
+          auto &raw = (k ? (t1 ? id(ha1_care_fut) : id(ha_care_fut)) : (t1 ? id(ha1_care_zug) : id(ha_care_zug)))->state;
+          auto items = aqcare::parse(raw);
+          uint32_t i = lv_roller_get_selected(id(pk_roller)->obj);
+          if (i < items.size() && items[i].name != id(care_cur)[k]) {
+            id(care_pick)[k] = items[i].name;
+            id(care_val)[k] = 1.0f;
+          }
+      - lvgl.widget.hide: pk_overlay
+      - script.execute: refresh_care
+
+  # Speichern über script.aquarium<s>_zugabe_vom_tablet bzw. _futter_vom_tablet.
+  # Danach folgt die Auswahl wieder dem Vorschlag aus HA (nächster fälliger Eintrag).
+  - id: save_care
+    mode: single
+    parameters:
+      k: int
+    then:
+      - if:
+          condition:
+            lambda: return !id(care_cur)[k].empty() && id(care_val)[k] > 0;
+          then:
+            - if:
+                condition:
+                  lambda: return k == 0 && id(tank) == 1;
+                then:
+                  - homeassistant.action:
+                      action: script.aquarium1_zugabe_vom_tablet
+                      data:
+                        produkt: !lambda return id(care_cur)[0];
+                        menge: !lambda return aqcare::fmt(id(care_val)[0]);
+            - if:
+                condition:
+                  lambda: return k == 0 && id(tank) == 0;
+                then:
+                  - homeassistant.action:
+                      action: script.aquarium_zugabe_vom_tablet
+                      data:
+                        produkt: !lambda return id(care_cur)[0];
+                        menge: !lambda return aqcare::fmt(id(care_val)[0]);
+            - if:
+                condition:
+                  lambda: return k == 1 && id(tank) == 1;
+                then:
+                  - homeassistant.action:
+                      action: script.aquarium1_futter_vom_tablet
+                      data:
+                        sorte: !lambda return id(care_cur)[1];
+                        menge: !lambda return aqcare::fmt(id(care_val)[1]);
+            - if:
+                condition:
+                  lambda: return k == 1 && id(tank) == 0;
+                then:
+                  - homeassistant.action:
+                      action: script.aquarium_futter_vom_tablet
+                      data:
+                        sorte: !lambda return id(care_cur)[1];
+                        menge: !lambda return aqcare::fmt(id(care_val)[1]);
+            - lambda: |-
+                id(care_pick)[k].clear();
+                id(care_val)[k] = 1.0f;
+                id(care_saved)[k] = millis();
+            - script.execute: refresh_care
+            - delay: 3s
+            - script.execute: refresh_care
 
   - id: show_overview
     then:
       - lvgl.widget.hide: ed_overlay
+      - lvgl.widget.hide: pk_overlay
       - lvgl.page.show: page_overview
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1080,6 +1272,7 @@ script:
   - id: show_control
     then:
       - lvgl.widget.hide: ed_overlay
+      - lvgl.widget.hide: pk_overlay
       - lvgl.page.show: page_control
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
@@ -1089,6 +1282,7 @@ script:
   - id: show_water
     then:
       - lvgl.widget.hide: ed_overlay
+      - lvgl.widget.hide: pk_overlay
       - lvgl.page.show: page_water
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1195,7 +1389,7 @@ lvgl:
                       on_click:
                         - script.execute: show_water
                       widgets:
-                        - label: {id: hdr_tab_water, x: 12, y: 18, text: "Wasser", text_color: 0x5C5C5C}
+                        - label: {id: hdr_tab_water, x: 12, y: 18, text: "Pflege", text_color: 0x5C5C5C}
                   - obj:
                       id: hdr_underline
                       x: 92
@@ -1569,7 +1763,7 @@ lvgl:
       bg_color: 0x000000
       scrollable: false
       widgets:
-        # Unter-Tabs: Werte | Wasserwechsel
+        # Unter-Tabs: Werte | Wechsel | Zugabe | Futter (Skript show_care)
         - obj:
             x: 16
             y: 64
@@ -1581,25 +1775,47 @@ lvgl:
                   id: wt_seg_values
                   x: 4
                   y: 4
-                  width: 218
+                  width: 108
                   height: 32
                   radius: 16
                   bg_color: 0x2A2A2A
                   on_click:
-                    - script.execute: show_water_values
+                    - script.execute: {id: show_care, v: 0}
                   widgets:
                     - label: {id: wt_seg_values_label, align: CENTER, text: "Werte", text_font: inter_14}
               - button:
                   id: wt_seg_change
-                  x: 226
+                  x: 114
                   y: 4
-                  width: 218
+                  width: 108
                   height: 32
                   radius: 16
                   on_click:
-                    - script.execute: show_water_change
+                    - script.execute: {id: show_care, v: 1}
                   widgets:
-                    - label: {id: wt_seg_change_label, align: CENTER, text: "Wasserwechsel", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: wt_seg_change_label, align: CENTER, text: "Wechsel", text_font: inter_14, text_color: 0x8C8C8C}
+              - button:
+                  id: wt_seg_dose
+                  x: 224
+                  y: 4
+                  width: 108
+                  height: 32
+                  radius: 16
+                  on_click:
+                    - script.execute: {id: show_care, v: 2}
+                  widgets:
+                    - label: {id: wt_seg_dose_label, align: CENTER, text: "Zugabe", text_font: inter_14, text_color: 0x8C8C8C}
+              - button:
+                  id: wt_seg_food
+                  x: 334
+                  y: 4
+                  width: 108
+                  height: 32
+                  radius: 16
+                  on_click:
+                    - script.execute: {id: show_care, v: 3}
+                  widgets:
+                    - label: {id: wt_seg_food_label, align: CENTER, text: "Futter", text_font: inter_14, text_color: 0x8C8C8C}
 
         # -------- Werte: Tippen öffnet die Auswahl (CO2 wird in HA aus pH/KH berechnet)
         - obj:
@@ -1856,6 +2072,355 @@ lvgl:
                     - script.execute: save_water_change
                   widgets:
                     - label: {id: ww_save_label, align: CENTER, text: "Wasserwechsel speichern", text_font: inter_22, text_color: 0x000000}
+
+        # -------- Zusatz: Eintrag antippen = Auswahl, Menge mit -/+ oder Schnellwahl
+        - obj:
+            id: zg_view
+            hidden: true
+            x: 0
+            y: 112
+            width: 480
+            height: 368
+            radius: 0
+            bg_opa: TRANSP
+            widgets:
+              - button:
+                  x: 16
+                  y: 0
+                  width: 448
+                  height: 96
+                  on_click:
+                    - script.execute: {id: open_picker, k: 0}
+                  widgets:
+                    - label: {x: 18, y: 12, text: "Zusatz", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: zg_name, x: 18, y: 34, width: 370, long_mode: DOT, text: "--", text_font: inter_22}
+                    - label: {id: zg_info, x: 18, y: 66, width: 400, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {x: 404, y: 34, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
+              - obj:
+                  x: 16
+                  y: 108
+                  width: 448
+                  height: 104
+                  widgets:
+                    - label: {x: 18, y: 12, text: "Menge", text_font: inter_14, text_color: 0x8C8C8C}
+                    - obj:
+                        x: 18
+                        y: 26
+                        width: SIZE_CONTENT
+                        height: SIZE_CONTENT
+                        bg_opa: TRANSP
+                        layout:
+                          type: flex
+                          flex_flow: ROW
+                          flex_align_cross: END
+                          pad_column: 6
+                        widgets:
+                          - label: {id: zg_val, text: "1", text_font: inter_56}
+                          - label: {id: zg_unit, text: "", text_font: inter_22, text_color: 0x8C8C8C, pad_bottom: 10}
+                    - button:
+                        x: 284
+                        y: 20
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - script.execute: {id: care_amount, k: 0, d: -1, wert: 0}
+                        widgets:
+                          - label: {align: CENTER, text: "-", text_font: inter_32}
+                    - button:
+                        x: 364
+                        y: 20
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - script.execute: {id: care_amount, k: 0, d: 1, wert: 0}
+                        widgets:
+                          - label: {align: CENTER, text: "+", text_font: inter_32}
+              - button:
+                  id: zg_chip_1
+                  x: 16
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 0
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(zg_chip_1_label)), nullptr);
+                  widgets:
+                    - label: {id: zg_chip_1_label, align: CENTER, text: "--"}
+              - button:
+                  id: zg_chip_2
+                  x: 107
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 0
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(zg_chip_2_label)), nullptr);
+                  widgets:
+                    - label: {id: zg_chip_2_label, align: CENTER, text: "--"}
+              - button:
+                  id: zg_chip_3
+                  x: 198
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 0
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(zg_chip_3_label)), nullptr);
+                  widgets:
+                    - label: {id: zg_chip_3_label, align: CENTER, text: "--"}
+              - button:
+                  id: zg_chip_4
+                  x: 289
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 0
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(zg_chip_4_label)), nullptr);
+                  widgets:
+                    - label: {id: zg_chip_4_label, align: CENTER, text: "--"}
+              - button:
+                  id: zg_chip_5
+                  x: 380
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 0
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(zg_chip_5_label)), nullptr);
+                  widgets:
+                    - label: {id: zg_chip_5_label, align: CENTER, text: "--"}
+              - button:
+                  x: 16
+                  y: 276
+                  width: 448
+                  height: 80
+                  bg_color: 0xD9A920
+                  pressed:
+                    bg_color: 0xB08A18
+                  on_click:
+                    - script.execute: {id: save_care, k: 0}
+                  widgets:
+                    - label: {id: zg_save_label, align: CENTER, text: "Zugabe speichern", text_font: inter_22, text_color: 0x000000}
+
+        # -------- Futter: Eintrag antippen = Auswahl, Menge mit -/+ oder Schnellwahl
+        - obj:
+            id: fu_view
+            hidden: true
+            x: 0
+            y: 112
+            width: 480
+            height: 368
+            radius: 0
+            bg_opa: TRANSP
+            widgets:
+              - button:
+                  x: 16
+                  y: 0
+                  width: 448
+                  height: 96
+                  on_click:
+                    - script.execute: {id: open_picker, k: 1}
+                  widgets:
+                    - label: {x: 18, y: 12, text: "Futter", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {id: fu_name, x: 18, y: 34, width: 370, long_mode: DOT, text: "--", text_font: inter_22}
+                    - label: {id: fu_info, x: 18, y: 66, width: 400, long_mode: DOT, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+                    - label: {x: 404, y: 34, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
+              - obj:
+                  x: 16
+                  y: 108
+                  width: 448
+                  height: 104
+                  widgets:
+                    - label: {x: 18, y: 12, text: "Menge", text_font: inter_14, text_color: 0x8C8C8C}
+                    - obj:
+                        x: 18
+                        y: 26
+                        width: SIZE_CONTENT
+                        height: SIZE_CONTENT
+                        bg_opa: TRANSP
+                        layout:
+                          type: flex
+                          flex_flow: ROW
+                          flex_align_cross: END
+                          pad_column: 6
+                        widgets:
+                          - label: {id: fu_val, text: "1", text_font: inter_56}
+                          - label: {id: fu_unit, text: "", text_font: inter_22, text_color: 0x8C8C8C, pad_bottom: 10}
+                    - button:
+                        x: 284
+                        y: 20
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - script.execute: {id: care_amount, k: 1, d: -1, wert: 0}
+                        widgets:
+                          - label: {align: CENTER, text: "-", text_font: inter_32}
+                    - button:
+                        x: 364
+                        y: 20
+                        width: 64
+                        height: 64
+                        radius: 32
+                        bg_color: 0x1E1E1E
+                        on_click:
+                          - script.execute: {id: care_amount, k: 1, d: 1, wert: 0}
+                        widgets:
+                          - label: {align: CENTER, text: "+", text_font: inter_32}
+              - button:
+                  id: fu_chip_1
+                  x: 16
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 1
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(fu_chip_1_label)), nullptr);
+                  widgets:
+                    - label: {id: fu_chip_1_label, align: CENTER, text: "--"}
+              - button:
+                  id: fu_chip_2
+                  x: 107
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 1
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(fu_chip_2_label)), nullptr);
+                  widgets:
+                    - label: {id: fu_chip_2_label, align: CENTER, text: "--"}
+              - button:
+                  id: fu_chip_3
+                  x: 198
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 1
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(fu_chip_3_label)), nullptr);
+                  widgets:
+                    - label: {id: fu_chip_3_label, align: CENTER, text: "--"}
+              - button:
+                  id: fu_chip_4
+                  x: 289
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 1
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(fu_chip_4_label)), nullptr);
+                  widgets:
+                    - label: {id: fu_chip_4_label, align: CENTER, text: "--"}
+              - button:
+                  id: fu_chip_5
+                  x: 380
+                  y: 220
+                  width: 84
+                  height: 48
+                  on_click:
+                    - script.execute:
+                        id: care_amount
+                        k: 1
+                        d: 0
+                        wert: !lambda return strtof(lv_label_get_text(id(fu_chip_5_label)), nullptr);
+                  widgets:
+                    - label: {id: fu_chip_5_label, align: CENTER, text: "--"}
+              - button:
+                  x: 16
+                  y: 276
+                  width: 448
+                  height: 80
+                  bg_color: 0xD9A920
+                  pressed:
+                    bg_color: 0xB08A18
+                  on_click:
+                    - script.execute: {id: save_care, k: 1}
+                  widgets:
+                    - label: {id: fu_save_label, align: CENTER, text: "Fütterung speichern", text_font: inter_22, text_color: 0x000000}
+
+        # Auswahl eines Zusatzes bzw. einer Futtersorte (Skripte open_picker, pick_apply)
+        - obj:
+            id: pk_overlay
+            hidden: true
+            x: 0
+            y: 56
+            width: 480
+            height: 424
+            radius: 0
+            bg_color: 0x000000
+            widgets:
+              - label: {id: pk_title, x: 24, y: 14, text: "", text_font: inter_22}
+              - roller:
+                  id: pk_roller
+                  x: 16
+                  y: 52
+                  width: 448
+                  height: 264
+                  visible_row_count: 7
+                  text_font: inter_18
+                  text_align: CENTER
+                  text_color: 0x5C5C5C
+                  bg_color: 0x121212
+                  border_width: 0
+                  radius: 16
+                  selected:
+                    bg_color: 0x1E1E1E
+                    text_color: 0xD9A920
+                  options: ["--"]
+              - button:
+                  x: 16
+                  y: 332
+                  width: 216
+                  height: 76
+                  on_click:
+                    - lvgl.widget.hide: pk_overlay
+                  widgets:
+                    - label: {align: CENTER, text: "Abbrechen", text_color: 0x8C8C8C}
+              - button:
+                  x: 248
+                  y: 332
+                  width: 216
+                  height: 76
+                  bg_color: 0xD9A920
+                  pressed:
+                    bg_color: 0xB08A18
+                  on_click:
+                    - script.execute: pick_apply
+                  widgets:
+                    - label: {align: CENTER, text: "Übernehmen", text_color: 0x000000}
 
         # Auswahl eines Werts (über der Seite, unter der Kopfzeile)
         - obj:

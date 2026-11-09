@@ -55,9 +55,11 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 - **Tabs:**
   - **Übersicht:** Sensoren, Geräte, Leistung, Wasserwechsel, nächste Zugabe.
   - **Steuerung:** Licht, CO2, Pumpe.
-  - **Wasser** mit zwei Unter-Tabs:
+  - **Pflege** (früher „Wasser“) mit vier Unter-Tabs (`show_care`, v = 0 bis 3):
     - *Werte:* Eingabe der Tropfentests.
-    - *Wasserwechsel:* Menge in Liter; vorbelegt mit `input_number.aq_ww_liter`, Schnellwahl 3/5/7.5/10/15/20 L.
+    - *Wechsel:* Wasserwechsel in Liter; vorbelegt mit `input_number.aq_ww_liter`, Schnellwahl 3/5/7.5/10/15/20 L.
+    - *Zugabe* und *Futter:* oben der Eintrag (Vorschlag aus HA = was als Nächstes fällig ist, gelbe Info), antippen öffnet die Auswahl (`pk_overlay`); darunter die Menge mit −/+ (Schritt aus HA: 0.25 ml bzw. Löffel, 0.5 Sticks/Portionen) und Schnellwahl. Speichern ruft `script.aquarium<s>_zugabe_vom_tablet` (produkt, menge) bzw. `_futter_vom_tablet` (sorte, menge) auf; danach folgt die Auswahl wieder dem Vorschlag.
+    - Daten: `sensor.aquarium<s>_tablet_pflege` mit den Attributen `zugaben`/`futter` (Zeilen `name|einheit|mehrzahl|schritt|info`) und `zugabe_vorschlag`/`futter_vorschlag`; zerlegt in `common/aquarium_pflege.h`.
 - **Display-Schlaf:**
   - Aus nach 3 Minuten ohne Berührung und ohne Bewegung (`binary_sensor.bewegungsmelder_aqara_occupancy`).
   - Bewegung weckt es von 07:00 bis 23:00, Berührung weckt es immer. Die Weck-Berührung löst keinen Button aus.

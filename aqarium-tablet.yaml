@@ -932,7 +932,7 @@ script:
             size_t p = nm.find_last_of(' ');
             return p == std::string::npos ? nm : nm.substr(p + 1);
 
-  # Startseite: Name, Wasserwechsel, nächste Zugabe und Status je Becken.
+  # Startseite: Name, Wasserwechsel, nächste Zugabe, nächste Fütterung und Status je Becken.
   # Punkte davor: grün = ok, gelb = heute, orange = fällig bzw. Warnung, rot = TDS-Sprung
   - id: refresh_start
     then:
@@ -946,14 +946,18 @@ script:
           };
           auto dot = [](int n, bool known) -> uint32_t { return !known ? 0x5C5C5C : n < 0 ? 0xFF7A3D : n == 0 ? 0xD9A920 : 0x4CAF50; };
           struct T {
-            text_sensor::TextSensor *name, *product, *wtext; sensor::Sensor *due, *oor, *warn;
-            lv_obj_t *l_name, *l_ww, *l_dose, *l_status, *d_ww, *d_dose, *d_status; const char *fallback;
+            text_sensor::TextSensor *name, *product, *wtext, *more, *food, *food_lvl; sensor::Sensor *due, *oor, *warn;
+            lv_obj_t *l_name, *l_ww, *l_dose, *l_food, *l_status, *d_ww, *d_dose, *d_food, *d_status; const char *fallback;
           };
           const T tanks[] = {
-            {id(ha_name), id(ha_next_dose_product), id(ha_warn_text), id(ha_water_change_due), id(ha_out_of_range_count), id(ha_warn_count),
-             id(st0_name), id(st0_ww), id(st0_dose), id(st0_status), id(st0_ww_dot), id(st0_dose_dot), id(st0_status_dot), "Becken 1"},
-            {id(ha1_name), id(ha1_next_dose_product), id(ha1_warn_text), id(ha1_water_change_due), id(ha1_out_of_range_count), id(ha1_warn_count),
-             id(st1_name), id(st1_ww), id(st1_dose), id(st1_status), id(st1_ww_dot), id(st1_dose_dot), id(st1_status_dot), "Becken 2"},
+            {id(ha_name), id(ha_next_dose_product), id(ha_warn_text), id(ha_next_dose_more), id(ha_food_text), id(ha_food_level),
+             id(ha_water_change_due), id(ha_out_of_range_count), id(ha_warn_count),
+             id(st0_name), id(st0_ww), id(st0_dose), id(st0_food), id(st0_status),
+             id(st0_ww_dot), id(st0_dose_dot), id(st0_food_dot), id(st0_status_dot), "Becken 1"},
+            {id(ha1_name), id(ha1_next_dose_product), id(ha1_warn_text), id(ha1_next_dose_more), id(ha1_food_text), id(ha1_food_level),
+             id(ha1_water_change_due), id(ha1_out_of_range_count), id(ha1_warn_count),
+             id(st1_name), id(st1_ww), id(st1_dose), id(st1_food), id(st1_status),
+             id(st1_ww_dot), id(st1_dose_dot), id(st1_food_dot), id(st1_status_dot), "Becken 2"},
           };
           for (int t = 0; t < 2; t++) {
             auto &k = tanks[t];
@@ -969,8 +973,17 @@ script:
             std::string pr = k.product->state;
             if (pr.empty() || pr == "unknown") pr = "Zugabe";
             std::string dose = pr + " " + days(dd, dd != INT_MIN);
+            int more = atoi(k.more->state.c_str());
+            if (dd != INT_MIN && more > 0) dose += str_sprintf(" (+%d)", more);
             lv_label_set_text(k.l_dose, dose.c_str());
             lv_obj_set_style_bg_color(k.d_dose, lv_color_hex(dot(dd, dd != INT_MIN)), LV_PART_MAIN);
+
+            // Fütterung: Text und Stufe rechnet HA (sensor.aquarium<s>_naechste_fuetterung)
+            std::string fd = k.food->state;
+            bool fk = !fd.empty() && fd != "unknown" && fd != "unavailable";
+            int fl = atoi(k.food_lvl->state.c_str());
+            lv_label_set_text(k.l_food, fk ? fd.c_str() : "Fütterung --");
+            lv_obj_set_style_bg_color(k.d_food, lv_color_hex(!fk ? 0x5C5C5C : fl >= 2 ? 0xFF7A3D : fl == 1 ? 0xD9A920 : 0x4CAF50), LV_PART_MAIN);
 
             // Status: TDS (nur Becken 0) > Warnungen aus HA > Werte ausser Soll > ok
             std::string st; uint32_t col;
@@ -1443,12 +1456,14 @@ lvgl:
               - label: {id: st0_temp_d, x: 10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
               - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
               - label: {id: st0_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st0_ww_dot, x: 12, y: 359, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_ww, x: 26, y: 352, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st0_dose_dot, x: 12, y: 380, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_dose, x: 26, y: 373, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st0_status_dot, x: 12, y: 401, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st0_status, x: 26, y: 394, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - obj: {id: st0_ww_dot, x: 12, y: 351, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_ww, x: 26, y: 344, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st0_dose_dot, x: 12, y: 369, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_dose, x: 26, y: 362, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st0_food_dot, x: 12, y: 387, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_food, x: 26, y: 380, width: 196, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
+              - obj: {id: st0_status_dot, x: 12, y: 405, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_status, x: 26, y: 398, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
         - button:
             x: 242
             y: 56
@@ -1476,12 +1491,14 @@ lvgl:
               - label: {id: st1_temp_d, x: 10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
               - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 25, text: "", text_font: inter_14}
               - label: {id: st1_tds_d, align: TOP_RIGHT, x: -10, y: 42, text: "", text_font: inter_14, text_color: 0x8C8C8C}
-              - obj: {id: st1_ww_dot, x: 12, y: 359, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_ww, x: 26, y: 352, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
-              - obj: {id: st1_dose_dot, x: 12, y: 380, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_dose, x: 26, y: 373, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
-              - obj: {id: st1_status_dot, x: 12, y: 401, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
-              - label: {id: st1_status, x: 26, y: 394, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
+              - obj: {id: st1_ww_dot, x: 12, y: 351, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_ww, x: 26, y: 344, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st1_dose_dot, x: 12, y: 369, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_dose, x: 26, y: 362, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st1_food_dot, x: 12, y: 387, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_food, x: 26, y: 380, width: 196, long_mode: DOT, text: "Fütterung --", text_font: inter_14}
+              - obj: {id: st1_status_dot, x: 12, y: 405, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_status, x: 26, y: 398, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
 
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview

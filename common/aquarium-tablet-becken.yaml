@@ -153,6 +153,28 @@ text_sensor:
     attribute: produkt
     on_value:
       - script.execute: refresh_dose
+  # weitere Zusätze am selben Tag (Startseite "(+n)")
+  - platform: homeassistant
+    id: ha${s}_next_dose_more
+    entity_id: sensor.aquarium${s}_naechste_zugabe
+    attribute: weitere
+    on_value:
+      - script.execute: refresh_start
+
+  # nächste Fütterung als fertiger Text von HA, z. B. "Futtersticks Snow morgen" oder
+  # "Frostfutter morgen · heute auftauen"; stufe 0 = ok, 1 = heute/vorbereiten, 2 = überfällig
+  - platform: homeassistant
+    id: ha${s}_food_text
+    entity_id: sensor.aquarium${s}_naechste_fuetterung
+    attribute: anzeige
+    on_value:
+      - script.execute: refresh_start
+  - platform: homeassistant
+    id: ha${s}_food_level
+    entity_id: sensor.aquarium${s}_naechste_fuetterung
+    attribute: stufe
+    on_value:
+      - script.execute: refresh_start
 
   - platform: homeassistant
     id: ha${s}_out_of_range

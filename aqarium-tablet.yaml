@@ -12,12 +12,18 @@ substitutions:
   room_temp_entity: sensor.aquarium_aquarium_monitor_temperature
   room_humidity_entity: sensor.aquarium_aquarium_monitor_humidity
   motion_entity: binary_sensor.bewegungsmelder_aqara_occupancy
+  # Becken 1 (Nano Cube Plants): bisher ist nur das Licht smart
+  tank1_light_entity: switch.aquarium_nano_cube_plants_led
 
   # Display sleep: off after this long without touch or motion,
   # motion does not wake the display during the night (touch always does)
   sleep_after_ms: "180000"
   night_start_hour: "23"
   night_end_hour: "7"
+
+  # Startseite: Abstand zwischen zwei Bildern der Becken-Animation (100 ms = 10 Bilder/s).
+  # Reagiert das Tablet auf der Startseite träge, auf 150 oder 200 erhöhen.
+  pixel_frame_ms: "100"
 
 # Home-Assistant-Daten pro Becken (Wasserwerte, Wasserwechsel, Zugabe, Name),
 # siehe common/aquarium-tablet-becken.yaml. Becken 0 = "aquarium" (Nano Cube Garnelen),
@@ -30,6 +36,11 @@ packages:
 esphome:
   name: aquarium-display
   friendly_name: Aquarium Display
+  # Startseite: Becken als animierter 8-Bit-Würfel wie die HA-Karte aquarium-pixel-card.
+  # aquarium_pixel_data.h wird im HA-Repo erzeugt (tools/aquarium_pixel_tablet_export.js).
+  includes:
+    - common/aquarium_pixel.h
+    - common/aquarium_pixel_data.h
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -110,6 +121,38 @@ interval:
           then:
             - light.turn_off: backlight
 
+  # Startseite: Becken animieren (common/aquarium_pixel.h), nur sichtbar und bei Display an.
+  # Zustände wie in der HA-Karte: Licht aus = Mondlicht, CO2 aus = keine Bläschen,
+  # Pumpe aus = ruhige Oberfläche, Wasserwechsel überfällig = trübes Wasser,
+  # Warnung oder Werte ausser Soll = blinkendes "!". Becken 1 hat bisher nur Licht;
+  # CO2 und Pumpe gelten dort als an.
+  - interval: ${pixel_frame_ms}ms
+    then:
+      - lambda: |-
+          if (!id(start_visible) || !id(backlight).remote_values.is_on()) return;
+          static uint32_t last = 0;
+          uint32_t now = millis();
+          float dt = last ? std::min(0.1f, (now - last) / 1000.f) : 0.1f;
+          last = now;
+          if (!aq_tank[0].ready()) { aq_tank[0].init(&aqpx::garnelen); aq_tank[1].init(&aqpx::plants); }
+          auto on = [](binary_sensor::BinarySensor *b) { return !b->has_state() || b->state; };
+          for (int n = 0; n < 2; n++) {
+            float due = (n ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
+            float oor = (n ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state;
+            float nw = (n ? id(ha1_warn_count) : id(ha_warn_count))->state;
+            bool warn = (!isnan(oor) && oor >= 1) || (!isnan(nw) && nw >= 1) ||
+                        (n == 0 && (id(ha_tds_jump).state || id(ha_tds_high).state));
+            bool murk = !isnan(due) && due < 0;
+            if (n == 0) aq_tank[0].set_target(on(id(ha_light)), on(id(ha_co2)), on(id(ha_pump)), murk, warn);
+            else aq_tank[1].set_target(on(id(ha1_light)), true, true, murk, warn);
+            lv_obj_t *cv = (lv_obj_t *) (n ? id(st1_canvas) : id(st0_canvas));
+            lv_draw_buf_t *db = lv_canvas_get_draw_buf(cv);
+            if (db == nullptr) continue;
+            aq_tank[n].render(now, dt, (uint16_t *) db->data, db->header.stride / 2,
+                              [](uint8_t r, uint8_t g, uint8_t b) -> uint16_t { return lv_color_to_u16(lv_color_make(r, g, b)); });
+            lv_obj_invalidate(cv);
+          }
+
 globals:
   # water test entered on the tablet, not yet saved: pH, KH, NO2, NO3, NH4 ("" = not measured)
   - id: pending
@@ -147,6 +190,14 @@ globals:
   - id: tank
     type: int
     initial_value: "0"
+  # Startseite sichtbar: nur dann laufen die Becken-Animationen
+  - id: start_visible
+    type: bool
+    initial_value: "true"
+  # Entität, die ein langer Druck auf der Startseite umschaltet ("" = keine)
+  - id: press_entity
+    type: std::string
+    initial_value: '""'
 
 # Colors: background 0x000000, tile 0x121212, text 0xFFFFFF / 0x8C8C8C / 0x5C5C5C,
 # accent 0xD9A920 dark yellow (on, new); status traffic light: ok 0x4CAF50, warning 0xFF7A3D, alert 0xFF5C5C
@@ -309,6 +360,11 @@ binary_sensor:
     on_state:
       - script.execute: refresh_hw
 
+  # Licht von Becken 1, bisher nur für die Startseite (Mondlicht, langer Druck)
+  - platform: homeassistant
+    id: ha1_light
+    entity_id: ${tank1_light_entity}
+
   - platform: homeassistant
     id: ha_tds_jump
     entity_id: ${tds_jump_entity}
@@ -329,18 +385,21 @@ sensor:
     entity_id: ${water_temp_entity}
     on_value:
       - script.execute: refresh_hw
+      - script.execute: refresh_start_values
 
   - platform: homeassistant
     id: ha_tds
     entity_id: ${tds_entity}
     on_value:
       - script.execute: refresh_hw
+      - script.execute: refresh_start_values
 
   - platform: homeassistant
     id: ha_tds_rise
     entity_id: ${tds_rise_entity}
     on_value:
       - script.execute: refresh_hw
+      - script.execute: refresh_start_values
 
   - platform: homeassistant
     id: ha_room_temp
@@ -841,7 +900,8 @@ script:
             size_t p = nm.find_last_of(' ');
             return p == std::string::npos ? nm : nm.substr(p + 1);
 
-  # Startseite: Name, Wasserwechsel, nächste Zugabe und Status je Becken
+  # Startseite: Name, Wasserwechsel, nächste Zugabe und Status je Becken.
+  # Punkte davor: grün = ok, gelb = heute, orange = fällig bzw. Warnung, rot = TDS-Sprung
   - id: refresh_start
     then:
       - lambda: |-
@@ -852,15 +912,16 @@ script:
             if (n == 0) return "heute";
             return n == -1 ? std::string("seit 1 Tag fällig") : str_sprintf("seit %d Tagen fällig", -n);
           };
+          auto dot = [](int n, bool known) -> uint32_t { return !known ? 0x5C5C5C : n < 0 ? 0xFF7A3D : n == 0 ? 0xD9A920 : 0x4CAF50; };
           struct T {
             text_sensor::TextSensor *name, *product, *wtext; sensor::Sensor *due, *oor, *warn;
-            lv_obj_t *l_name, *l_ww, *l_dose, *l_icon, *l_status; const char *fallback;
+            lv_obj_t *l_name, *l_ww, *l_dose, *l_status, *d_ww, *d_dose, *d_status; const char *fallback;
           };
           const T tanks[] = {
             {id(ha_name), id(ha_next_dose_product), id(ha_warn_text), id(ha_water_change_due), id(ha_out_of_range_count), id(ha_warn_count),
-             id(st0_name), id(st0_ww), id(st0_dose), id(st0_status_icon), id(st0_status), "Becken 1"},
+             id(st0_name), id(st0_ww), id(st0_dose), id(st0_status), id(st0_ww_dot), id(st0_dose_dot), id(st0_status_dot), "Becken 1"},
             {id(ha1_name), id(ha1_next_dose_product), id(ha1_warn_text), id(ha1_water_change_due), id(ha1_out_of_range_count), id(ha1_warn_count),
-             id(st1_name), id(st1_ww), id(st1_dose), id(st1_status_icon), id(st1_status), "Becken 2"},
+             id(st1_name), id(st1_ww), id(st1_dose), id(st1_status), id(st1_ww_dot), id(st1_dose_dot), id(st1_status_dot), "Becken 2"},
           };
           for (int t = 0; t < 2; t++) {
             auto &k = tanks[t];
@@ -868,38 +929,86 @@ script:
             lv_label_set_text(k.l_name, (nm.empty() || nm == "unknown") ? k.fallback : nm.c_str());
 
             float due = k.due->state;
-            bool ww_due = !isnan(due) && due <= 0;
             std::string ww = "Wasserwechsel " + days((int) due, !isnan(due));
             lv_label_set_text(k.l_ww, ww.c_str());
-            lv_obj_set_style_text_color(k.l_ww, lv_color_hex(ww_due ? 0xFF7A3D : 0xFFFFFF), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(k.d_ww, lv_color_hex(dot((int) due, !isnan(due))), LV_PART_MAIN);
 
             int dd = id(dose_days)[t];
             std::string pr = k.product->state;
             if (pr.empty() || pr == "unknown") pr = "Zugabe";
             std::string dose = pr + " " + days(dd, dd != INT_MIN);
             lv_label_set_text(k.l_dose, dose.c_str());
-            lv_obj_set_style_text_color(k.l_dose, lv_color_hex((dd != INT_MIN && dd <= 0) ? 0xFF7A3D : 0xFFFFFF), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(k.d_dose, lv_color_hex(dot(dd, dd != INT_MIN)), LV_PART_MAIN);
 
             // Status: TDS (nur Becken 0) > Warnungen aus HA > Werte ausser Soll > ok
-            std::string st; uint32_t col; const char *icon;
+            std::string st; uint32_t col;
             int oor = isnan(k.oor->state) ? 0 : (int) k.oor->state;
             int nw = isnan(k.warn->state) ? 0 : (int) k.warn->state;
             std::string wt = k.wtext->state;
-            if (t == 0 && id(ha_tds_jump).state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; icon = "\U000F0026"; }
-            else if (t == 0 && id(ha_tds_high).state) { st = "TDS zu hoch"; col = 0xFF7A3D; icon = "\U000F0026"; }
+            if (t == 0 && id(ha_tds_jump).state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; }
+            else if (t == 0 && id(ha_tds_high).state) { st = "TDS zu hoch"; col = 0xFF7A3D; }
             else if (nw >= 1) {
               st = (wt.empty() || wt == "unknown") ? str_sprintf("%d Warnungen", nw) : (nw > 1 ? wt + str_sprintf(" (+%d)", nw - 1) : wt);
-              col = 0xFF7A3D; icon = "\U000F0026";
+              col = 0xFF7A3D;
             }
-            else if (oor >= 1) { st = oor == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", oor); col = 0xFF7A3D; icon = "\U000F0026"; }
-            else { st = "Alles in Ordnung"; col = 0x4CAF50; icon = "\U000F05E1"; }
+            else if (oor >= 1) { st = oor == 1 ? std::string("1 Wert ausser Soll") : str_sprintf("%d Werte ausser Soll", oor); col = 0xFF7A3D; }
+            else { st = "Alles in Ordnung"; col = 0x4CAF50; }
             lv_label_set_text(k.l_status, st.c_str());
-            lv_label_set_text(k.l_icon, icon);
-            lv_obj_set_style_text_color(k.l_icon, lv_color_hex(col), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(k.d_status, lv_color_hex(col), LV_PART_MAIN);
           }
+
+  # Startseite: Wassertemperatur und TDS oben rechts (nur Becken 0 hat den Monitor).
+  # TDS mit Anstieg seit dem Wasserwechsel, ab 25 % orange (wie die HA-Karte)
+  - id: refresh_start_values
+    then:
+      - lambda: |-
+          float t = id(ha_water_temp).state, d = id(ha_tds).state, r = id(ha_tds_rise).state;
+          std::string ts = isnan(t) ? "" : str_sprintf("%.1f °C", t);
+          std::string ds = isnan(d) ? "" : str_sprintf("%.0f ppm", d);
+          if (!isnan(d) && !isnan(r)) ds += str_sprintf(" · %+.0f %%", r);
+          lv_label_set_text(id(st0_temp), ts.c_str());
+          lv_label_set_text(id(st0_tds), ds.c_str());
+          lv_obj_set_style_text_color(id(st0_tds), lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
+
+  # Startseite: Berührung eines Beckens. phase 0 = Druck, 1 = Loslassen, 2 = langer Druck.
+  # Lampe bzw. Diffusor leuchten beim Drücken auf; ein langer Druck darauf schaltet
+  # Licht bzw. CO2 um (Becken 1: nur Licht). Kurzes Tippen öffnet das Becken (on_short_click).
+  - id: tank_touch
+    parameters:
+      n: int
+      phase: int
+    then:
+      - lambda: |-
+          id(press_entity) = "";
+          auto &t = aq_tank[n];
+          if (!t.ready()) return;
+          if (phase == 1) { t.release(); return; }
+          lv_indev_t *in = lv_indev_active();
+          if (in == nullptr) return;
+          lv_point_t p;
+          lv_indev_get_point(in, &p);
+          lv_area_t a;
+          lv_obj_get_coords((lv_obj_t *) (n ? id(st1_canvas) : id(st0_canvas)), &a);
+          int k = t.hit(p.x - a.x1, p.y - a.y1);
+          if (phase == 0) { if (k != aqpx::HL_NONE) t.press(k, millis()); return; }
+          const char *e = "";
+          if (k == aqpx::HL_LAMP) e = n ? "${tank1_light_entity}" : "${light_entity}";
+          else if (k == aqpx::HL_CO2 && n == 0) e = "${co2_entity}";
+          if (*e == 0) { t.release(); return; }
+          t.flash(k, millis());
+          id(press_entity) = e;
+      - if:
+          condition:
+            lambda: return !id(press_entity).empty();
+          then:
+            - homeassistant.action:
+                action: homeassistant.toggle
+                data:
+                  entity_id: !lambda return id(press_entity);
 
   - id: show_start
     then:
+      - lambda: id(start_visible) = true;
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: hdr_nav
       - lvgl.widget.show: hdr_title
@@ -913,6 +1022,7 @@ script:
     then:
       - lambda: |-
           id(tank) = n;
+          id(start_visible) = false;
           for (auto &p : id(pending)) p.clear();
           id(ww_touched) = false;
           float d = (n ? id(ha1_ww_default) : id(ha_ww_default))->state;
@@ -1094,39 +1204,72 @@ lvgl:
 
   pages:
     # ---------------------------------------------------------------- Start
-    # pro Becken ein Button, öffnet die Seiten unten für dieses Becken
+    # pro Becken eine Karte (Garnelen links, Plants rechts): oben das Becken als
+    # animierter 8-Bit-Würfel (Canvas, gezeichnet im interval oben), darüber Name und
+    # Messwerte, darunter Wasserwechsel, Zugabe und Status. Tippen öffnet das Becken,
+    # langer Druck auf Lampe bzw. Diffusor schaltet Licht bzw. CO2 (Skript tank_touch).
     - id: page_start
       bg_color: 0x000000
       scrollable: false
       widgets:
         - button:
-            x: 16
-            y: 68
-            width: 448
-            height: 188
-            on_click:
+            x: 6
+            y: 62
+            width: 232
+            height: 412
+            radius: 12
+            clip_corner: true
+            bg_color: 0x05060A
+            pressed:
+              bg_color: 0x0C0E16
+            on_press:
+              - script.execute: {id: tank_touch, n: 0, phase: 0}
+            on_release:
+              - script.execute: {id: tank_touch, n: 0, phase: 1}
+            on_long_press:
+              - script.execute: {id: tank_touch, n: 0, phase: 2}
+            on_short_click:
               - script.execute: {id: open_tank, n: 0}
             widgets:
-              - label: {id: st0_name, x: 20, y: 18, width: 360, long_mode: DOT, text: "--", text_font: inter_22}
-              - label: {x: 404, y: 18, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
-              - label: {id: st0_ww, x: 20, y: 66, width: 408, long_mode: DOT, text: "Wasserwechsel --"}
-              - label: {id: st0_dose, x: 20, y: 98, width: 408, long_mode: DOT, text: "Zugabe --"}
-              - label: {id: st0_status_icon, x: 20, y: 140, text: "\U000F05E1", text_font: mdi_24, text_color: 0x5C5C5C}
-              - label: {id: st0_status, x: 56, y: 142, width: 372, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+              - canvas: {id: st0_canvas, x: 0, y: 0, width: 232, height: 324}
+              - label: {id: st0_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
+              - label: {id: st0_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
+              - label: {id: st0_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - obj: {id: st0_ww_dot, x: 12, y: 338, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_ww, x: 26, y: 331, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st0_dose_dot, x: 12, y: 360, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_dose, x: 26, y: 353, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st0_status_dot, x: 12, y: 382, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st0_status, x: 26, y: 375, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
         - button:
-            x: 16
-            y: 272
-            width: 448
-            height: 188
-            on_click:
+            x: 242
+            y: 62
+            width: 232
+            height: 412
+            radius: 12
+            clip_corner: true
+            bg_color: 0x05060A
+            pressed:
+              bg_color: 0x0C0E16
+            on_press:
+              - script.execute: {id: tank_touch, n: 1, phase: 0}
+            on_release:
+              - script.execute: {id: tank_touch, n: 1, phase: 1}
+            on_long_press:
+              - script.execute: {id: tank_touch, n: 1, phase: 2}
+            on_short_click:
               - script.execute: {id: open_tank, n: 1}
             widgets:
-              - label: {id: st1_name, x: 20, y: 18, width: 360, long_mode: DOT, text: "--", text_font: inter_22}
-              - label: {x: 404, y: 18, text: "\U000F0142", text_font: mdi_24, text_color: 0x5C5C5C}
-              - label: {id: st1_ww, x: 20, y: 66, width: 408, long_mode: DOT, text: "Wasserwechsel --"}
-              - label: {id: st1_dose, x: 20, y: 98, width: 408, long_mode: DOT, text: "Zugabe --"}
-              - label: {id: st1_status_icon, x: 20, y: 140, text: "\U000F05E1", text_font: mdi_24, text_color: 0x5C5C5C}
-              - label: {id: st1_status, x: 56, y: 142, width: 372, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+              - canvas: {id: st1_canvas, x: 0, y: 0, width: 232, height: 324}
+              - label: {id: st1_name, x: 10, y: 8, width: 150, long_mode: DOT, text: "--", text_font: inter_14}
+              - label: {id: st1_temp, align: TOP_RIGHT, x: -10, y: 8, text: "", text_font: inter_14}
+              - label: {id: st1_tds, align: TOP_RIGHT, x: -10, y: 26, text: "", text_font: inter_14, text_color: 0x8C8C8C}
+              - obj: {id: st1_ww_dot, x: 12, y: 338, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_ww, x: 26, y: 331, width: 196, long_mode: DOT, text: "Wasserwechsel --", text_font: inter_14}
+              - obj: {id: st1_dose_dot, x: 12, y: 360, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_dose, x: 26, y: 353, width: 196, long_mode: DOT, text: "Zugabe --", text_font: inter_14}
+              - obj: {id: st1_status_dot, x: 12, y: 382, width: 6, height: 6, radius: 3, bg_color: 0x5C5C5C}
+              - label: {id: st1_status, x: 26, y: 375, width: 196, long_mode: DOT, text: "--", text_font: inter_14}
 
     # ---------------------------------------------------------------- Übersicht
     - id: page_overview

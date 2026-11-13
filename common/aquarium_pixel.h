@@ -3,7 +3,8 @@
 // Portierung von render() aus der HA-Karte www/aquarium-pixel-card.js (HA-Repo).
 // Die statische Szene (Voxel, Glas, Lampe, Boden) kommt aus aquarium_pixel_data.h,
 // erzeugt mit tools/aquarium_pixel_tablet_export.js im HA-Repo. Hier läuft nur die
-// Animation: Garnelen (nachts ruhig, fressen am Futter), CO2-Bläschen, Wasseroberfläche,
+// Animation: Garnelen (nachts ruhig, fressen am Futter; im Garnelenbecken zwei zusätzliche,
+// die schwimmen), drei Rote Rennschnecken (Garnelenbecken), CO2-Bläschen, Wasseroberfläche,
 // Mondlicht, Trübung, "!", Sanduhr bei Wartung bzw. Fütterungspause, Futter nach dem Füttern.
 //
 // Ausgabe: RGB565, doppelt vergrössert (1 Szenenpixel = 2x2 Displaypixel).
@@ -60,6 +61,28 @@ class Tank {
     sp_.clear();
     for (int i = 0; i < d->nshrimp; i++)
       sp_.push_back({d->shrimps[i][0], d->shrimps[i][1], d->shrimps[i][2], d->shrimps[i][3], 0, 0});
+    // Becken mit Garnelen: zusätzlich je eine rote und blaue schwimmende Garnele und drei
+    // Rote Rennschnecken (hinten an der Scheibe, vorne links an der Scheibe, am Boden)
+    sn_.clear();
+    if (d->nshrimp > 0) {
+      for (int i = 0; i < 2; i++) {
+        Shrimp w{0, 0, 0, i, 0, 0};
+        w.swim = true; w.fx = d->X * (.6f + .2f * i); w.fy = d->Y * (.75f - .1f * i); w.fz = d->ZW * .6f;
+        sp_.push_back(w);
+      }
+      uint32_t q = 977;
+      auto sr = [&q]() { q = q * 1664525u + 1013904223u; return q / 4294967296.f; };
+      for (int i = 0; i < 3; i++) {
+        Snail n{};
+        n.art = i;
+        if (i == SN_BODEN) { n.x = 6 + sr() * (d->X - 12); n.y = 6 + sr() * (d->Y - 12); n.a = sr() * 6.28f; }
+        else {
+          n.u = 4 + sr() * (d->X - 8); n.z = (i == SN_HINTEN ? d->ZW * .55f : 3) + sr() * (d->ZW * .35f); n.a = sr() * 6.28f;
+          for (auto &g : n.algen) { g.u = 1 + sr() * (d->X - 2); g.z = 1 + sr() * (d->ZW - 2); g.weg = 0; }
+        }
+        sn_.push_back(n);
+      }
+    }
     // Hintergrund (gedithert)
     static const uint8_t bayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
     for (int y = 0; y < CH; y++)
@@ -128,7 +151,16 @@ class Tank {
       draw_food();
       eat = fz_ <= gz0 + .01f;
     }
-    for (auto &s : sp_) { step_shrimp(s, now, eat); draw_shrimp(s, now); }
+    for (auto &s : sp_) {
+      if (s.swim) step_swimmer(s, now, dt);
+      else step_shrimp(s, now, eat);
+      draw_shrimp(s, now);
+    }
+    for (auto &n : sn_) {
+      step_snail(n, dt, now);
+      if (n.art == SN_BODEN) draw_ground_snail(n);
+      else if (n.art == SN_HINTEN) { draw_algen(n); draw_pane_snail(n, now); }
+    }
 
     // CO2-Bläschen
     if (co2_ && (int32_t) (now - next_bubble_) > 0) {
@@ -147,6 +179,9 @@ class Tank {
     }
     bubbles_.erase(std::remove_if(bubbles_.begin(), bubbles_.end(), [&](const Bubble &b) { return b.z >= d.ZW + .5f; }),
                    bubbles_.end());
+    // Schnecke vorne an der Scheibe (Unterseite) vor allem anderen
+    for (auto &n : sn_)
+      if (n.art == SN_VORNE) { draw_algen(n); draw_pane_snail(n, now); }
 
     // Wasser, Glas/Lampe, Mondlicht, Hervorhebung; dann auf den Hintergrund
     ts_ += dt * (.15f + .85f * flow_);
@@ -209,7 +244,16 @@ class Tank {
   }
 
  private:
-  struct Shrimp { int x, y, d, col; uint32_t next, pause; };
+  struct Shrimp {
+    int x, y, d, col;
+    uint32_t next, pause;
+    bool swim = false;                    // schwimmt (sonst am Boden)
+    float fx = 0, fy = 0, fz = 0, tx = 0, ty = 0, tz = 0, sz = -1;
+    uint32_t tt = 0;                      // nächstes Ziel
+  };
+  struct Alga { float u, z; uint32_t weg; };
+  enum { SN_HINTEN = 0, SN_VORNE = 1, SN_BODEN = 2 };
+  struct Snail { int art; float u, z, x, y, a; Alga algen[35]; };
   struct Bubble { float x, y, z, ph; };
 
   const TankData *d_ = nullptr;
@@ -217,6 +261,7 @@ class Tank {
   uint8_t *fr_ = nullptr, *bg_ = nullptr;
   int16_t *fd_ = nullptr;
   std::vector<Shrimp> sp_;
+  std::vector<Snail> sn_;
   std::vector<Bubble> bubbles_;
   uint32_t next_bubble_ = 0, seed_ = 0x2545F491;
   float ts_ = 0, night_ = 0, flow_ = 1, murk_ = 0, tn_ = 0, tf_ = 1, tm_ = 0;
@@ -355,6 +400,159 @@ class Tank {
       voxelf(fx + o[0], fy + o[1], fz_, c);
     }
   }
+  // Schwimmende Garnele: gleitet im vorderen Teil zu wechselnden Zielen in mittlerer bis oberer
+  // Höhe, nachts langsamer und tiefer (wie stepSwimmer in der HA-Karte)
+  void step_swimmer(Shrimp &s, uint32_t now, float dt) {
+    const TankData &d = *d_;
+    if ((int32_t) (now - s.tt) > 0) {
+      s.tx = d.X * (.45f + rnd() * .45f); s.ty = d.Y * (.45f + rnd() * .45f);
+      s.tz = d.ZW * ((.3f + rnd() * .55f) * (1 - .5f * night_)); s.tt = now + 3000 + (uint32_t) (rnd() * 4000);
+    }
+    float vx = s.tx - s.fx, vy = s.ty - s.fy, vz = s.tz - s.fz, l = sqrtf(vx * vx + vy * vy + vz * vz);
+    if (l > .3f) {
+      float v = std::min(l, dt * 1.6f * (1 - .6f * night_)) / l;
+      s.fx += vx * v; s.fy += vy * v; s.fz += vz * v;
+      float hl = hypotf(vx, vy);
+      if (hl > .3f) {
+        int sx = sgn(rnd_(vx / hl * 1.4f)), sy = sgn(rnd_(vy / hl * 1.4f));
+        if (sx || sy) s.d = dir_of(sx, sy);
+      }
+    }
+    s.x = rnd_(s.fx); s.y = rnd_(s.fy);
+    s.sz = roundf((s.fz + sinf((now % 43982u) / 700.f + s.col * 3) * .25f) * 3) / 3;  // auf ganze Bildpixel
+  }
+
+  // ---- Rote Rennschnecken (wie in der HA-Karte): pro Bildpixel rückwärts gerechnet
+  // (Bildpixel -> Stelle der Schnecke), Mitte auf ganze Pixel, Richtung in 16 Stufen
+  static constexpr float SK = 1.15f;  // Grösse
+  // Scheiben: vorne links (y = Y) und hinten (y = 0); u längs, z Höhe
+  void pane_fwd(int art, float u, float z, float &x, float &y) const {
+    if (art == SN_VORNE) { x = d_->OX + 2 * (u - d_->Y); y = d_->OY + u + d_->Y - 3 * z; }
+    else { x = d_->OX + 2 * u; y = d_->OY + u - 3 * z; }
+  }
+  void pane_inv(int art, float x, float y, float &u, float &z) const {
+    if (art == SN_VORNE) { u = (x - d_->OX) / 2 + d_->Y; z = (d_->OY + u + d_->Y - y) / 3; }
+    else { u = (x - d_->OX) / 2; z = (d_->OY + u - y) / 3; }
+  }
+  void step_snail(Snail &n, float dt, uint32_t now) {
+    if (rnd() < dt * .3f) n.a += (rnd() - .5f) * 1.6f;
+    float v = .35f * dt;
+    if (n.art != SN_BODEN) {
+      float lo = n.art == SN_HINTEN ? d_->ZW * .4f : 1.5f, hi = d_->ZW - 2;
+      n.u += cosf(n.a) * v; n.z += sinf(n.a) * v * .7f;
+      if (n.u < 2 || n.u > d_->X - 2) { n.a = (float) M_PI - n.a; n.u = std::max(2.f, std::min(d_->X - 2.f, n.u)); }
+      if (n.z < lo || n.z > hi) { n.a = -n.a; n.z = std::max(lo, std::min(hi, n.z)); }
+      for (auto &g : n.algen) {
+        if (!g.weg && fabsf(g.u - n.u) < 1.6f && fabsf(g.z - n.z) < 1.3f) g.weg = now + 600000 + (uint32_t) (rnd() * 600000) + 1;
+        else if (g.weg && (int32_t) (now - g.weg) > 0) g.weg = 0;
+      }
+    } else {
+      float nx = n.x + cosf(n.a) * v * .7f, ny = n.y + sinf(n.a) * v * .7f;
+      if (nx < 2.5f || ny < 2.5f || nx > d_->X - 3.5f || ny > d_->Y - 3.5f || abs(gz(rnd_(nx), rnd_(ny)) - gz(rnd_(n.x), rnd_(n.y))) > 1)
+        n.a += (float) M_PI * (.5f + rnd());
+      else { n.x = nx; n.y = ny; }
+    }
+  }
+  static Rgb rgbf(float r, float g, float b) { return {clamp(r), clamp(g), clamp(b)}; }
+  // Gehäuse von oben/aussen: oranges Gehäuse, Reihen schwarzer Flecken, Glanz, Spitze hinten
+  static bool shell(float s, float t, Rgb &c) {
+    float ns = (s + .2f) / 1.6f, nt = t / 1.3f, e = ns * ns + nt * nt;
+    if (e > 1) return false;
+    float f = 1.05f - .55f * e + .35f * std::max(0.f, -nt - ns * .3f) * (1 - e);
+    if (hypotf(s + 1.25f, t) < .35f) { c = rgbf(235 * f, 120 * f, 60 * f); return true; }
+    int reihe = (int) floorf((s + 2) * 1.4f);
+    float a = fmodf((s + 2) * 1.4f, 1), b = fmodf((t + 2 + (reihe % 2) * .35f) * 1.6f, 1);
+    if (fabsf(a - .5f) < .17f && fabsf(b - .5f) < .19f && e < .85f) c = {34, 18, 12};
+    else c = rgbf(214 * f, 92 * f, 34 * f);
+    return true;
+  }
+  static bool foot(float s, float t, Rgb &c) {
+    float ef = (s - .4f) / 2 * ((s - .4f) / 2) + (t / 1.1f) * (t / 1.1f);
+    if (ef > 1) return false;
+    c = ef > .7f ? Rgb{140, 132, 118} : Rgb{188, 178, 160};
+    return true;
+  }
+  static bool feeler(float s, float t, Rgb &c) {
+    float k = (s - 2.5f) / .25f;
+    if (k < -.3f || k > 3.3f) return false;
+    for (int side = -1; side <= 1; side += 2)
+      if (fabsf(t - side * (.3f + k * .18f)) < .16f) { c = {95, 85, 75}; return true; }
+    return false;
+  }
+  // Unterseite durchs Glas: Gehäuserand, Fuss mit wandernden Wellen, Kopf mit Maul (geht auf und zu)
+  static bool under(float s, float t, uint32_t now, Rgb &c) {
+    float hx = s - 1.9f;
+    if (hypotf(hx, t) < .6f) {
+      float auf = (sinf((now % 1068142u) / 170.f) + 1) / 2;
+      c = hypotf(hx - .1f, t) < .12f + .16f * auf ? Rgb{70, 40, 34} : Rgb{176, 164, 148};
+      return true;
+    }
+    float ef = ((s - .2f) / 1.7f) * ((s - .2f) / 1.7f) + (t / .95f) * (t / .95f);
+    if (ef <= 1) {
+      float w = .9f + .1f * sinf(s * 5 + (now % 1633628u) / 260.f);
+      c = ef > .75f ? rgbf(150 * w, 140 * w, 124 * w) : rgbf(205 * w, 196 * w, 180 * w);
+      return true;
+    }
+    float es = ((s + .1f) / 1.85f) * ((s + .1f) / 1.85f) + (t / 1.4f) * (t / 1.4f);
+    if (es <= 1) { c = es > .8f ? Rgb{120, 50, 22} : Rgb{168, 72, 30}; return true; }
+    return feeler(s, t, c);
+  }
+  static float dir16(float a) { const float st = (float) M_PI / 8; return roundf(a / st) * st; }
+  void draw_pane_snail(const Snail &n, uint32_t now) {
+    float a = dir16(n.a), ca = cosf(a), sa = sinf(a), fx, fy, u0, z0;
+    pane_fwd(n.art, n.u, n.z, fx, fy);
+    int cx = rnd_(fx), cy = rnd_(fy);
+    pane_inv(n.art, cx, cy, u0, z0);
+    for (int y = cy - 9; y <= cy + 9; y++)
+      for (int x = cx - 10; x <= cx + 10; x++) {
+        if (x < 0 || y < 0 || x >= W_ || y >= H_) continue;
+        float u, z;
+        pane_inv(n.art, x, y, u, z);
+        float du = (u - u0) / SK, dz = (z - z0) / (.7f * SK), ls = du * ca + dz * sa, lt = -du * sa + dz * ca;
+        Rgb c;
+        bool hit = n.art == SN_VORNE ? under(ls, lt, now, c) : (shell(ls, lt, c) || foot(ls, lt, c) || feeler(ls, lt, c));
+        if (!hit) continue;
+        if (n.art == SN_HINTEN) pset(x, y, c, (int) ((u + z + 1) * 64));
+        else { int i = y * W_ + x; uint8_t *o = &fr_[i * 4]; o[0] = c.r; o[1] = c.g; o[2] = c.b; o[3] = 255; fd_[i] = 32767; }
+      }
+  }
+  // Am Boden: Kuppel (Höhe bis 1.3 Voxel), pro Bildpixel von oben nach unten die Höhe suchen
+  void draw_ground_snail(const Snail &n) {
+    float a = dir16(n.a), ca = cosf(a), sa = sinf(a);
+    float gx0 = roundf(n.x * 2) / 2, gy0 = roundf(n.y * 2) / 2;
+    int g = gz(rnd_(n.x), rnd_(n.y)) + 1;
+    int cx = rnd_(d_->OX + 2 * (gx0 - gy0)), cy = rnd_(d_->OY + gx0 + gy0 - 3 * g);
+    for (int y = cy - 12; y <= cy + 8; y++)
+      for (int x = cx - 10; x <= cx + 10; x++) {
+        if (x < 0 || y < 0 || x >= W_ || y >= H_) continue;
+        for (int hi = 13; hi >= 0; hi--) {
+          float h = hi * .1f, dd = (x - d_->OX) / 2.f, q = y - d_->OY + 3 * (g + h), gx = (dd + q) / 2, gy = (q - dd) / 2;
+          float dx = (gx - gx0) / SK, dy = (gy - gy0) / SK, ls = dx * ca + dy * sa, lt = -dx * sa + dy * ca;
+          Rgb c;
+          bool hit = false;
+          if (hi > 0) {
+            float ns = (ls + .2f) / 1.6f, nt = lt / 1.3f, e = ns * ns + nt * nt;
+            hit = e <= 1 && 1.3f * sqrtf(1 - e) >= h && shell(ls, lt, c);
+          } else hit = foot(ls, lt, c) || feeler(ls, lt, c);
+          if (hit) { pset(x, y, c, (int) ((gx + gy + g + h) * 64 + g + 2)); break; }
+        }
+      }
+  }
+  // Algenpunkte auf der Scheibe der Schnecke (dezent, hinten von Pflanzen verdeckt)
+  void draw_algen(const Snail &n) {
+    for (auto &g : n.algen) {
+      if (g.weg) continue;
+      float fx, fy;
+      pane_fwd(n.art, g.u, g.z, fx, fy);
+      int x = rnd_(fx), y = rnd_(fy);
+      if (x < 0 || y < 0 || x >= W_ || y >= H_) continue;
+      int i = y * W_ + x;
+      if (n.art == SN_HINTEN && fd_[i] > (int) ((g.u + g.z + 1) * 64)) continue;
+      uint8_t *o = &fr_[i * 4];
+      o[0] = clamp(o[0] + (60 - o[0]) * .22f); o[1] = clamp(o[1] + (105 - o[1]) * .22f); o[2] = clamp(o[2] + (55 - o[2]) * .22f);
+    }
+  }
+
   void draw_shrimp(const Shrimp &s, uint32_t now) {
     // Farben wie in der Karte: Kopf, Mitte, Schwanz, Fühler
     static const Rgb C[2][4] = {{{255, 42, 54}, {255, 20, 36}, {168, 12, 24}, {255, 120, 110}},
@@ -363,14 +561,17 @@ class Tank {
     int dx = DIRS[s.d][0], dy = DIRS[s.d][1];
     for (int k = 0; k < 3; k++) {
       int x = s.x - dx * k, y = s.y - dy * k;
-      if (x >= 0 && y >= 0 && x < d_->X && y < d_->Y) voxel(x, y, gz(x, y) + 1, c[k]);
+      if (x >= 0 && y >= 0 && x < d_->X && y < d_->Y) {
+        if (s.swim) voxelf(x, y, s.sz, c[k]);
+        else voxel(x, y, gz(x, y) + 1, c[k]);
+      }
     }
-    int z = gz(s.x, s.y) + 1, hx = d_->OX + 2 * (s.x - s.y), hy = d_->OY + s.x + s.y - 3 * z;
-    int key = (s.x + s.y + z) * 64 + z + 1;
+    float z = s.swim ? s.sz : gz(s.x, s.y) + 1, hx = d_->OX + 2 * (s.x - s.y), hy = d_->OY + s.x + s.y - 3 * z;
+    int key = (int) ((s.x + s.y + z) * 64 + z + 1);
     float ux = 2 * (dx - dy), uy = dx + dy, l = hypotf(ux, uy);
     if (l == 0) l = 1;
     ux /= l; uy /= l;
-    float wig = (int32_t) (now - s.pause) < 0 ? sinf((now % 56549u) / 90.f) * .6f : 0;  // 56549 ms ≈ 100 Perioden
+    float wig = s.swim || (int32_t) (now - s.pause) < 0 ? sinf((now % 56549u) / 90.f) * .6f : 0;  // 56549 ms ≈ 100 Perioden
     for (int side = -1; side <= 1; side += 2)
       for (int k = 2; k <= 5; k++) {
         float px = hx - .5f + ux * k - uy * side * (k * .35f + wig), py = hy + .5f + uy * k + ux * side * (k * .35f + wig) - k * .25f;

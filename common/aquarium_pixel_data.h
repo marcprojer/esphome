@@ -4214,7 +4214,7 @@ static const uint8_t garnelen_ground[576] = {
   0x03,0x04,0x04,0x03,0x04,0x04,0x04,0x03,0x03,0x02,0x02,0x02,0x02,0x02,0x02,0x03
 };
 static const int8_t garnelen_shrimps[][4] = {{17, 12, 0, 0}, {12, 15, 3, 0}, {20, 20, 5, 1}, {13, 9, 1, 1}};
-static const TankData garnelen = {108, 154, 54, 94, 24, 24, 26, 12.00f, true, 22, 9, 6, garnelen_base, (const int16_t *) garnelen_depth, garnelen_mask, garnelen_ov, garnelen_ground, 4, garnelen_shrimps};
+static const TankData garnelen = {108, 154, 54, 94, 24, 24, 26, 12.00f, true, 22, 9, 6, 17, 14, garnelen_base, (const int16_t *) garnelen_depth, garnelen_mask, garnelen_ov, garnelen_ground, 4, garnelen_shrimps};
 
 // ---- plants (normal, ohne Garnelen)
 static const uint32_t plants_base[16632] = {
@@ -8424,6 +8424,6 @@ static const uint8_t plants_ground[576] = {
   0x03,0x03,0x03,0x03,0x03,0x02,0x02,0x02,0x02,0x02,0x03,0x03,0x02,0x03,0x03,0x02
 };
 static const int8_t plants_shrimps[][4] = {{0, 0, 0, 0}};
-static const TankData plants = {108, 154, 54, 94, 24, 24, 26, 12.00f, false, 9, 22, 6, plants_base, (const int16_t *) plants_depth, plants_mask, plants_ov, plants_ground, 0, plants_shrimps};
+static const TankData plants = {108, 154, 54, 94, 24, 24, 26, 12.00f, false, 9, 22, 6, 14, 17, plants_base, (const int16_t *) plants_depth, plants_mask, plants_ov, plants_ground, 0, plants_shrimps};
 
 }  // namespace aqpx

@@ -138,7 +138,8 @@ interval:
   # Zustände wie in der HA-Karte: Licht aus = Mondlicht, CO2 aus = keine Bläschen,
   # Pumpe aus = ruhige Oberfläche, Wasserwechsel überfällig = trübes Wasser,
   # Warnung oder Werte ausser Soll = blinkendes "!", Wartung oder Fütterungspause = Sanduhr
-  # (leert sich mit der Restzeit). Becken 1 hat bisher nur Licht;
+  # (leert sich mit der Restzeit), nach dem Füttern 30 min Futter am Boden (Garnelen fressen),
+  # nachts ruhen die Garnelen. Becken 1 hat bisher nur Licht;
   # CO2 und Pumpe gelten dort als an.
   - interval: ${pixel_frame_ms}ms
     then:
@@ -164,6 +165,12 @@ interval:
             float dauer = (n ? id(ha1_wartung_dauer) : id(ha_wartung_dauer))->state;
             bool pause = (n ? id(ha1_wartung) : id(ha_wartung))->state && !isnan(rest) && !isnan(dauer) && dauer > 0;
             aq_tank[n].set_pause(pause ? rest / dauer : -1);
+            // Futter nach dem Füttern (30 min sichtbar, frisch = sinkt ab)
+            float fr = (n ? id(ha1_futter_rest) : id(ha_futter_rest))->state;
+            auto &fb = (n ? id(ha1_futter_bild) : id(ha_futter_bild))->state;
+            int fk = fb == "sticks" ? aqpx::FOOD_STICKS : fb == "gemuese" ? aqpx::FOOD_GEMUESE
+                   : fb == "pulver" ? aqpx::FOOD_PULVER : fb == "tablette" ? aqpx::FOOD_TABLETTE : aqpx::FOOD_NONE;
+            aq_tank[n].set_food(isnan(fr) ? aqpx::FOOD_NONE : fk, isnan(fr) ? 0 : fr / 30, !isnan(fr) && fr >= 29);
             lv_obj_t *cv = (lv_obj_t *) (n ? id(st1_canvas) : id(st0_canvas));
             lv_draw_buf_t *db = lv_canvas_get_draw_buf(cv);
             if (db == nullptr) continue;

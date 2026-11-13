@@ -3,8 +3,8 @@
 // Portierung von render() aus der HA-Karte www/aquarium-pixel-card.js (HA-Repo).
 // Die statische Szene (Voxel, Glas, Lampe, Boden) kommt aus aquarium_pixel_data.h,
 // erzeugt mit tools/aquarium_pixel_tablet_export.js im HA-Repo. Hier läuft nur die
-// Animation: Garnelen, CO2-Bläschen, Wasseroberfläche, Mondlicht, Trübung, "!",
-// Sanduhr bei Wartung bzw. Fütterungspause.
+// Animation: Garnelen (nachts ruhig, fressen am Futter), CO2-Bläschen, Wasseroberfläche,
+// Mondlicht, Trübung, "!", Sanduhr bei Wartung bzw. Fütterungspause, Futter nach dem Füttern.
 //
 // Ausgabe: RGB565, doppelt vergrössert (1 Szenenpixel = 2x2 Displaypixel).
 #pragma once
@@ -26,6 +26,7 @@ struct TankData {
   float LY;
   bool mirror;
   float bsx, bsy, bz0;      // CO2-Diffusor (Voxel) und Höhe des Austritts
+  uint8_t fx, fy;           // Stelle, an der das Futter liegt (Voxel)
   const uint32_t *base;     // ARGB, A = 0 oder 255
   const int16_t *depth;     // Tiefe pro Pixel (-32768 = leer)
   const uint8_t *mask;      // Bit 0-1 Wasser (1) / Oberfläche (2), 4 Lampe, 8 Lampe-Trefferfläche,
@@ -37,6 +38,7 @@ struct TankData {
 };
 
 enum { HL_NONE = 0, HL_LAMP = 1, HL_CO2 = 2 };
+enum { FOOD_NONE = 0, FOOD_STICKS = 1, FOOD_GEMUESE = 2, FOOD_PULVER = 3, FOOD_TABLETTE = 4 };
 static constexpr int BORDER = 4;  // Rand um das Becken (wie in der Karte)
 static constexpr int SCALE = 2;
 
@@ -79,6 +81,13 @@ class Tank {
   }
   // Wartung bzw. Fütterungspause: verbleibender Anteil 0..1 (Sanduhr), < 0 = keine Pause
   void set_pause(float f) { pause_ = f; }
+  // Futter im Becken: Art (FOOD_*), verbleibender Anteil 0..1 (30 min nach dem Füttern),
+  // neu = gerade gefüttert, dann sinkt es von der Oberfläche ab
+  void set_food(int kind, float rest, bool neu) {
+    if (kind == FOOD_NONE || rest <= 0) { food_ = FOOD_NONE; return; }
+    if (food_ == FOOD_NONE || kind != food_) fz_ = neu ? d_->ZW - .5f : d_->ground[d_->fy * d_->X + d_->fx] + 1;
+    food_ = kind; food_rest_ = std::min(1.f, rest);
+  }
   // Hervorhebung: während des Drückens wachsend, nach dem Umschalten kurz aufblitzen
   void press(int k, uint32_t now) { press_k_ = k; press_t0_ = now; }
   void release() { press_k_ = HL_NONE; }
@@ -112,7 +121,14 @@ class Tank {
     }
     memcpy(fd_, d.depth, N_ * 2);
 
-    for (auto &s : sp_) { step_shrimp(s, now); draw_shrimp(s, now); }
+    bool eat = false;
+    if (food_ != FOOD_NONE) {
+      float gz0 = gz(d.fx, d.fy) + 1;
+      fz_ = std::max(gz0, fz_ - dt * 2.2f);
+      draw_food();
+      eat = fz_ <= gz0 + .01f;
+    }
+    for (auto &s : sp_) { step_shrimp(s, now, eat); draw_shrimp(s, now); }
 
     // CO2-Bläschen
     if (co2_ && (int32_t) (now - next_bubble_) > 0) {
@@ -206,6 +222,8 @@ class Tank {
   float ts_ = 0, night_ = 0, flow_ = 1, murk_ = 0, tn_ = 0, tf_ = 1, tm_ = 0;
   bool co2_ = true, warn_ = false, first_ = true;
   float pause_ = -1;
+  int food_ = FOOD_NONE;
+  float food_rest_ = 0, fz_ = 0;
   int press_k_ = HL_NONE, flash_k_ = HL_NONE;
   uint32_t press_t0_ = 0, flash_t0_ = 0;
 
@@ -271,16 +289,71 @@ class Tank {
     }
     px(3, 4, oben > 0 && (now / 300) % 2 == 0 ? sand : leer);  // rieselndes Korn
   }
+  // Voxel mit Höhe als Kommazahl (absinkendes Futter), wie drawVoxel in der Karte
+  void voxelf(int x, int y, float z, const Rgb &c) {
+    int sx = d_->OX + 2 * (x - y), sy = (int) floorf(d_->OY + (x + y) - 3 * z + .5f), k = (int) ((x + y + z) * 64 + z);
+    Rgb L = shade(c, .74f), R = shade(c, .52f);
+    for (int r = 0; r < 2; r++)
+      for (int q = -2; q < 2; q++) pset(sx + q, sy + r, c, k);
+    for (int r = 2; r < 5; r++) {
+      pset(sx - 2, sy + r, L, k); pset(sx - 1, sy + r, L, k);
+      pset(sx, sy + r, R, k); pset(sx + 1, sy + r, R, k);
+    }
+  }
   static constexpr int DIRS[8][2] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
-  void step_shrimp(Shrimp &s, uint32_t now) {
+  static int sgn(int v) { return (v > 0) - (v < 0); }
+  static int dir_of(int dx, int dy) {
+    for (int i = 0; i < 8; i++)
+      if (DIRS[i][0] == dx && DIRS[i][1] == dy) return i;
+    return 0;
+  }
+  // Nachts (night_) seltener und langsamer unterwegs. eat: Futter liegt am Boden ->
+  // hinlaufen und daneben fressen (Fühler wackeln). Wie stepShrimp in der HA-Karte.
+  void step_shrimp(Shrimp &s, uint32_t now, bool eat) {
     if ((int32_t) (now - s.next) < 0) return;
-    if (rnd() < .07f) { s.pause = now + 1200 + (uint32_t) (rnd() * 3000); s.next = s.pause; return; }
-    if (rnd() < .3f) s.d = (s.d + (rnd() < .5f ? 1 : 7)) % 8;
+    float n = eat ? 0 : night_;
+    if (eat) {
+      int ex = d_->fx - s.x, ey = d_->fy - s.y;
+      if (std::max(abs(ex), abs(ey)) <= 2) {
+        s.d = dir_of(sgn(ex), sgn(ey));
+        s.pause = now + 700 + (uint32_t) (rnd() * 900); s.next = s.pause; return;
+      }
+      if (rnd() < .75f) s.d = dir_of(sgn(ex), sgn(ey));
+    } else {
+      if (rnd() < .07f + .45f * n) { s.pause = now + (uint32_t) ((1200 + rnd() * 3000) * (1 + 2 * n)); s.next = s.pause; return; }
+      if (rnd() < .3f) s.d = (s.d + (rnd() < .5f ? 1 : 7)) % 8;
+    }
     int nx = s.x + DIRS[s.d][0], ny = s.y + DIRS[s.d][1];
     if (nx < 2 || ny < 2 || nx > d_->X - 3 || ny > d_->Y - 3 || abs(gz(nx, ny) - gz(s.x, s.y)) > 1) {
       s.d = (s.d + (rnd() < .5f ? 2 : 6)) % 8; s.next = now + 120; return;
     }
-    s.x = nx; s.y = ny; s.next = now + 170 + (uint32_t) (rnd() * 200);
+    s.x = nx; s.y = ny; s.next = now + (uint32_t) ((170 + rnd() * 200) * (1 + 3 * n));
+  }
+  // Futter wie drawFood in der HA-Karte: Sticks 3 Voxel, Gemüse/Tablette 2x2, Pulver als
+  // Wolke (beim Absinken auseinander) bzw. Staub; wird mit food_rest_ kleiner
+  void draw_food() {
+    static const Rgb C[5] = {{0, 0, 0}, {150, 95, 45}, {125, 195, 70}, {110, 200, 110}, {104, 92, 60}};
+    const Rgb &c = C[food_];
+    int fx = d_->fx, fy = d_->fy;
+    if (food_ == FOOD_PULVER) {
+      static const int8_t ST[12][2] = {{0, 0}, {1, 0}, {0, 1}, {-1, 0}, {0, -1}, {1, 1}, {-1, 1}, {1, -1}, {2, 0}, {0, 2}, {-2, 1}, {1, -2}};
+      float gz0 = gz(fx, fy) + 1, auf = std::min(1.f, (fz_ - gz0) / 3), sc = 1 + auf * 1.5f;
+      int n = (int) ceilf(food_rest_ * 12);
+      Rgb dark = shade(c, .7f);
+      for (int i = 0; i < n; i++) {
+        float u = ST[i][0] * sc, v = ST[i][1] * sc;
+        int sx = rnd_(d_->OX + 2 * (fx + u - fy - v)), sy = rnd_(d_->OY + fx + u + fy + v - 3 * fz_ + 3);
+        pset(sx, sy, i % 3 ? c : dark, (fx + fy + rnd_(fz_)) * 64 + 90);
+      }
+      return;
+    }
+    static const int8_t STICK[3][2] = {{0, 0}, {1, 0}, {2, 0}}, QUAD[4][2] = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+    bool st = food_ == FOOD_STICKS;
+    int total = st ? 3 : 4, n = std::max(1, (int) ceilf(food_rest_ * total));
+    for (int i = 0; i < n; i++) {
+      const int8_t *o = st ? STICK[i] : QUAD[i];
+      voxelf(fx + o[0], fy + o[1], fz_, c);
+    }
   }
   void draw_shrimp(const Shrimp &s, uint32_t now) {
     // Farben wie in der Karte: Kopf, Mitte, Schwanz, Fühler

@@ -104,6 +104,11 @@ sensor:
     entity_id: sensor.aquarium${s}_wartung_rest
     attribute: fuetterungspause
 
+  # Futter im Becken (Pixel-Becken): Minuten, die es noch sichtbar ist (0 = keins)
+  - platform: homeassistant
+    id: ha${s}_futter_rest
+    entity_id: sensor.aquarium${s}_futter_im_becken
+
 binary_sensor:
   # Wartung läuft (packages/aquarium<s>_wartung.yaml)
   - platform: homeassistant
@@ -121,6 +126,11 @@ text_sensor:
     attribute: text
     on_value:
       - script.execute: refresh_maint
+  # Darstellung des Futters im Pixel-Becken: sticks, gemuese, pulver, tablette
+  - platform: homeassistant
+    id: ha${s}_futter_bild
+    entity_id: sensor.aquarium${s}_futter_im_becken
+    attribute: bild
   # Dauern der beiden Wartungsknöpfe, z. B. "15,30" (wartung_minuten in einstellungen.yaml)
   - platform: homeassistant
     id: ha${s}_wartung_knoepfe

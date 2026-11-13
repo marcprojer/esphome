@@ -2,7 +2,7 @@
 //
 // Home Assistant liefert pro Becken (sensor.aquarium<s>_tablet_pflege, Attribute
 // "zugaben" und "futter") je eine Zeile pro Zusatz bzw. Futtersorte:
-//   name|einheit|einheit mehrzahl|schritt|info
+//   name|einheit|einheit mehrzahl|schritt|info[|pause]
 // z. B. "Crusta Minerals|Löffel|Löffel|0.25|Pulver · alle 7 Tage · fällig in 3 Tagen".
 // Die Infos rechnet HA; hier wird nur zerlegt und formatiert.
 #pragma once
@@ -16,6 +16,7 @@ namespace aqcare {
 struct Item {
   std::string name, unit1, unitn, info;
   float step;
+  bool pause;  // Futter: nach dem Speichern nach der Fütterungspause fragen (6. Feld "1")
 };
 
 inline std::vector<Item> parse(const std::string &s) {
@@ -35,7 +36,7 @@ inline std::vector<Item> parse(const std::string &s) {
     }
     if (f.size() >= 5 && !f[0].empty()) {
       float st = strtof(f[3].c_str(), nullptr);
-      out.push_back({f[0], f[1], f[2], f[4], st > 0 ? st : 0.5f});
+      out.push_back({f[0], f[1], f[2], f[4], st > 0 ? st : 0.5f, f.size() >= 6 && f[5] == "1"});
     }
     a = e + 1;
   }
@@ -77,6 +78,17 @@ inline std::string fmt(float v) {
   while (!s.empty() && s.back() == '0') s.pop_back();
   if (!s.empty() && s.back() == '.') s.pop_back();
   return s;
+}
+
+// Dauer des Wartungsknopfs i aus "15,30" (Attribut knoepfe), 0 = kein Knopf
+inline int knopf(const std::string &s, int i) {
+  size_t a = 0;
+  for (int k = 0; k < i; k++) {
+    a = s.find(',', a);
+    if (a == std::string::npos) return 0;
+    a++;
+  }
+  return a < s.size() ? atoi(s.c_str() + a) : 0;
 }
 
 }  // namespace aqcare

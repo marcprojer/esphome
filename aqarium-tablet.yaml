@@ -137,7 +137,8 @@ interval:
   # Startseite: Becken animieren (common/aquarium_pixel.h), nur sichtbar und bei Display an.
   # Zustände wie in der HA-Karte: Licht aus = Mondlicht, CO2 aus = keine Bläschen,
   # Pumpe aus = ruhige Oberfläche, Wasserwechsel überfällig = trübes Wasser,
-  # Warnung oder Werte ausser Soll = blinkendes "!". Becken 1 hat bisher nur Licht;
+  # Warnung oder Werte ausser Soll = blinkendes "!", Wartung oder Fütterungspause = Sanduhr
+  # (leert sich mit der Restzeit). Becken 1 hat bisher nur Licht;
   # CO2 und Pumpe gelten dort als an.
   - interval: ${pixel_frame_ms}ms
     then:
@@ -158,6 +159,11 @@ interval:
             bool murk = !isnan(due) && due < 0;
             if (n == 0) aq_tank[0].set_target(on(id(ha_light)), on(id(ha_co2)), on(id(ha_pump)), murk, warn);
             else aq_tank[1].set_target(on(id(ha1_light)), true, true, murk, warn);
+            // Sanduhr: Anteil der verbleibenden Zeit von Wartung bzw. Fütterungspause
+            float rest = (n ? id(ha1_wartung_rest) : id(ha_wartung_rest))->state;
+            float dauer = (n ? id(ha1_wartung_dauer) : id(ha_wartung_dauer))->state;
+            bool pause = (n ? id(ha1_wartung) : id(ha_wartung))->state && !isnan(rest) && !isnan(dauer) && dauer > 0;
+            aq_tank[n].set_pause(pause ? rest / dauer : -1);
             lv_obj_t *cv = (lv_obj_t *) (n ? id(st1_canvas) : id(st0_canvas));
             lv_draw_buf_t *db = lv_canvas_get_draw_buf(cv);
             if (db == nullptr) continue;
@@ -221,6 +227,14 @@ globals:
   - id: care_saved
     type: std::vector<uint32_t>
     initial_value: std::vector<uint32_t>(2, 0)
+  # Fütterungspause: angebotene Minuten nach dem Speichern einer Fütterung (0 = nicht fragen)
+  - id: fp_min
+    type: int
+    initial_value: "0"
+  # Dauer des zuletzt gedrückten Wartungsknopfs in Minuten
+  - id: maint_min
+    type: int
+    initial_value: "0"
   # Auswahl offen für: 0 = Zugabe, 1 = Futter
   - id: care_kind
     type: int
@@ -283,6 +297,7 @@ font:
       - "\U000F07E4" # molecule-co2
       - "\U000F1402" # pump
       - "\U000F05B7" # wrench
+      - "\U000F051F" # timer-sand (Rückfrage Fütterungspause)
 
 # Display-SPI (nur für die Init-Befehle des ST7701S)
 spi:
@@ -931,18 +946,53 @@ script:
             else lv_obj_clear_state(sw[i], LV_STATE_CHECKED);
           }
 
-  # Steuerung: Knopf "Wartung" des aktiven Beckens (Text aus HA, orange = läuft)
+  # Steuerung: Knöpfe "Wartung" des aktiven Beckens (Text und Dauern aus HA, orange = läuft)
   - id: refresh_maint
     then:
       - lambda: |-
-          bool on = (id(tank) ? id(ha1_wartung) : id(ha_wartung))->state;
-          auto &t = (id(tank) ? id(ha1_wartung_text) : id(ha_wartung_text))->state;
+          bool t1 = id(tank) == 1;
+          bool on = (t1 ? id(ha1_wartung) : id(ha_wartung))->state;
+          auto &t = (t1 ? id(ha1_wartung_text) : id(ha_wartung_text))->state;
+          float dauer = (t1 ? id(ha1_wartung_dauer) : id(ha_wartung_dauer))->state;
           bool ok = !t.empty() && t != "unknown" && t != "unavailable";
           lv_label_set_text(id(ctl_maint_state), ok ? t.c_str() : "--");
           lv_obj_set_style_text_color(id(ctl_maint_state), lv_color_hex(on ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
           lv_obj_set_style_text_color(id(ctl_maint_icon), lv_color_hex(on ? 0xFF7A3D : 0x5C5C5C), LV_PART_MAIN);
-          if (on) lv_obj_add_state(id(ctl_maint_switch), LV_STATE_CHECKED);
-          else lv_obj_clear_state(id(ctl_maint_switch), LV_STATE_CHECKED);
+          lv_obj_t *bt[2] = {id(ctl_maint_b0), id(ctl_maint_b1)};
+          lv_obj_t *lb[2] = {id(ctl_maint_b0_label), id(ctl_maint_b1_label)};
+          for (int i = 0; i < 2; i++) {
+            int m = aqcare::knopf((t1 ? id(ha1_wartung_knoepfe) : id(ha_wartung_knoepfe))->state, i);
+            if (m <= 0) { lv_obj_add_flag(bt[i], LV_OBJ_FLAG_HIDDEN); continue; }
+            lv_obj_clear_flag(bt[i], LV_OBJ_FLAG_HIDDEN);
+            lv_label_set_text(lb[i], (std::to_string(m) + " min").c_str());
+            bool act = on && !isnan(dauer) && (int) dauer == m;
+            lv_obj_set_style_bg_color(bt[i], lv_color_hex(act ? 0xFF7A3D : 0x2A2A2A), LV_PART_MAIN);
+            lv_obj_set_style_text_color(lb[i], lv_color_hex(act ? 0x000000 : 0xFFFFFF), LV_PART_MAIN);
+          }
+
+  # Wartungsknopf i (0/1): HA-Skript mit der Dauer des Knopfs; derselbe Knopf nochmals beendet
+  - id: maint_press
+    parameters:
+      i: int
+    then:
+      - lambda: |-
+          id(maint_min) = aqcare::knopf((id(tank) ? id(ha1_wartung_knoepfe) : id(ha_wartung_knoepfe))->state, i);
+      - if:
+          condition:
+            lambda: return id(maint_min) > 0 && id(tank) == 0;
+          then:
+            - homeassistant.action:
+                action: script.aquarium_wartung_umschalten
+                data:
+                  minuten: !lambda return std::to_string(id(maint_min));
+      - if:
+          condition:
+            lambda: return id(maint_min) > 0 && id(tank) == 1;
+          then:
+            - homeassistant.action:
+                action: script.aquarium1_wartung_umschalten
+                data:
+                  minuten: !lambda return std::to_string(id(maint_min));
 
   # Kopfzeile: Kurzname des aktiven Beckens (letztes Wort, z. B. "Garnelen")
   - id: refresh_header
@@ -1081,6 +1131,7 @@ script:
       - lambda: id(start_visible) = true;
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
+      - lvgl.widget.hide: fp_overlay
       - lvgl.widget.hide: hdr_nav
       - lvgl.widget.show: hdr_title
       - lvgl.page.show: page_start
@@ -1289,17 +1340,71 @@ script:
                         sorte: !lambda return id(care_cur)[1];
                         menge: !lambda return aqcare::fmt(id(care_val)[1]);
             - lambda: |-
+                // Futter: nach der Fütterungspause fragen, wenn die Futterart es will und HA sie
+                // anbietet (Attribut fuetterungspause > 0: CO2 oder Pumpe an, keine Pause läuft)
+                id(fp_min) = 0;
+                if (k == 1) {
+                  bool t1 = id(tank) == 1;
+                  auto items = aqcare::parse((t1 ? id(ha1_care_fut) : id(ha_care_fut))->state);
+                  int i = aqcare::find(items, id(care_cur)[1]);
+                  float fp = (t1 ? id(ha1_fpause) : id(ha_fpause))->state;
+                  if (i >= 0 && items[i].pause && !isnan(fp) && fp >= 1) id(fp_min) = (int) fp;
+                }
                 id(care_pick)[k].clear();
                 id(care_val)[k] = 1.0f;
                 id(care_saved)[k] = millis();
             - script.execute: refresh_care
+            - if:
+                condition:
+                  lambda: return id(fp_min) > 0;
+                then:
+                  - script.execute: fp_ask
             - delay: 3s
             - script.execute: refresh_care
+
+  # Rückfrage nach dem Füttern: CO2-Anlage und Pumpe für fp_min Minuten aus? Ohne Antwort
+  # schliesst sie nach 20 s (= nein)
+  - id: fp_ask
+    mode: restart
+    then:
+      - lambda: |-
+          std::string m = std::to_string(id(fp_min));
+          lv_label_set_text(id(fp_text), ("CO2-Anlage und Pumpe für " + m + " min ausschalten?").c_str());
+          lv_label_set_text(id(fp_yes_label), ("Ja, " + m + " min").c_str());
+      - lvgl.widget.show: fp_overlay
+      - delay: 20s
+      - lvgl.widget.hide: fp_overlay
+
+  - id: fp_answer
+    parameters:
+      ja: bool
+    then:
+      - script.stop: fp_ask
+      - lvgl.widget.hide: fp_overlay
+      - if:
+          condition:
+            lambda: return ja && id(fp_min) > 0 && id(tank) == 0;
+          then:
+            - homeassistant.action:
+                action: script.aquarium_wartung_starten
+                data:
+                  minuten: !lambda return std::to_string(id(fp_min));
+                  grund: Fütterung
+      - if:
+          condition:
+            lambda: return ja && id(fp_min) > 0 && id(tank) == 1;
+          then:
+            - homeassistant.action:
+                action: script.aquarium1_wartung_starten
+                data:
+                  minuten: !lambda return std::to_string(id(fp_min));
+                  grund: Fütterung
 
   - id: show_overview
     then:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
+      - lvgl.widget.hide: fp_overlay
       - lvgl.page.show: page_overview
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1310,6 +1415,7 @@ script:
     then:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
+      - lvgl.widget.hide: fp_overlay
       - lvgl.page.show: page_control
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
@@ -1320,6 +1426,7 @@ script:
     then:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
+      - lvgl.widget.hide: fp_overlay
       - lvgl.page.show: page_water
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1773,22 +1880,13 @@ lvgl:
                     bg_color: 0xFFFFFF
 
         # Wartung: CO2-Anlage und Pumpe des Beckens für eine Weile aus (HA-Skript
-        # aquarium<s>_wartung_umschalten, Dauer aus einstellungen.yaml); erneut tippen beendet
-        - button:
+        # aquarium<s>_wartung_umschalten, Dauern aus wartung_minuten in einstellungen.yaml).
+        # Zwei Knöpfe (z. B. 15 / 30 min); der laufende ist orange und beendet beim Tippen
+        - obj:
             x: 16
             y: 380
             width: 448
             height: 92
-            on_click:
-              - if:
-                  condition:
-                    lambda: return id(tank) == 0;
-                  then:
-                    - homeassistant.action:
-                        action: script.aquarium_wartung_umschalten
-                  else:
-                    - homeassistant.action:
-                        action: script.aquarium1_wartung_umschalten
             widgets:
               - obj:
                   x: 20
@@ -1797,25 +1895,34 @@ lvgl:
                   height: 52
                   radius: 26
                   bg_color: 0x1E1E1E
-                  clickable: false
                   widgets:
                     - label: {id: ctl_maint_icon, align: CENTER, text: "\U000F05B7", text_font: mdi_28, text_color: 0x5C5C5C}
               - label: {x: 90, y: 18, text: "Wartung", text_font: inter_22}
-              - label: {id: ctl_maint_state, x: 90, y: 52, width: 260, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
-              - switch:
-                  id: ctl_maint_switch
-                  x: 364
-                  y: 29
-                  width: 64
-                  height: 34
-                  clickable: false
+              - label: {id: ctl_maint_state, x: 90, y: 52, width: 170, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+              - button:
+                  id: ctl_maint_b0
+                  x: 274
+                  y: 18
+                  width: 76
+                  height: 56
+                  radius: 12
                   bg_color: 0x2A2A2A
-                  indicator:
-                    bg_color: 0x2A2A2A
-                    checked:
-                      bg_color: 0xFF7A3D
-                  knob:
-                    bg_color: 0xFFFFFF
+                  on_click:
+                    - script.execute: {id: maint_press, i: 0}
+                  widgets:
+                    - label: {id: ctl_maint_b0_label, align: CENTER, text: "15 min", text_font: inter_18}
+              - button:
+                  id: ctl_maint_b1
+                  x: 358
+                  y: 18
+                  width: 76
+                  height: 56
+                  radius: 12
+                  bg_color: 0x2A2A2A
+                  on_click:
+                    - script.execute: {id: maint_press, i: 1}
+                  widgets:
+                    - label: {id: ctl_maint_b1_label, align: CENTER, text: "30 min", text_font: inter_18}
 
     # ---------------------------------------------------------------- Wasser
     - id: page_water
@@ -2544,3 +2651,54 @@ lvgl:
                     - script.execute: refresh_water
                   widgets:
                     - label: {align: CENTER, text: "Übernehmen", text_color: 0x000000}
+
+        # Rückfrage nach dem Speichern einer Fütterung (Skripte fp_ask, fp_answer)
+        - obj:
+            id: fp_overlay
+            hidden: true
+            x: 0
+            y: 56
+            width: 480
+            height: 424
+            radius: 0
+            bg_color: 0x000000
+            widgets:
+              - obj:
+                  x: 16
+                  y: 16
+                  width: 448
+                  height: 300
+                  widgets:
+                    - obj:
+                        x: 198
+                        y: 28
+                        width: 52
+                        height: 52
+                        radius: 26
+                        bg_color: 0x1E1E1E
+                        widgets:
+                          - label: {align: CENTER, text: "\U000F051F", text_font: mdi_28, text_color: 0xFF7A3D}
+                    - label: {x: 0, y: 100, width: 448, text_align: CENTER, text: "Fütterung gespeichert", text_font: inter_18, text_color: 0xD9A920}
+                    - label: {id: fp_text, x: 32, y: 136, width: 384, text_align: CENTER, text: "", text_font: inter_22}
+                    - label: {x: 0, y: 236, width: 448, text_align: CENTER, text: "Ohne Antwort schliesst sich das Fenster nach 20 s", text_font: inter_14, text_color: 0x8C8C8C}
+              - button:
+                  x: 16
+                  y: 332
+                  width: 216
+                  height: 76
+                  on_click:
+                    - script.execute: {id: fp_answer, ja: false}
+                  widgets:
+                    - label: {align: CENTER, text: "Nein", text_color: 0x8C8C8C}
+              - button:
+                  x: 248
+                  y: 332
+                  width: 216
+                  height: 76
+                  bg_color: 0xFF7A3D
+                  pressed:
+                    bg_color: 0xC85A28
+                  on_click:
+                    - script.execute: {id: fp_answer, ja: true}
+                  widgets:
+                    - label: {id: fp_yes_label, align: CENTER, text: "Ja", text_color: 0x000000}

@@ -87,6 +87,23 @@ sensor:
     on_value:
       - script.execute: refresh_ww
 
+  # Wartung bzw. Fütterungspause (packages/aquarium<s>_wartung.yaml): Restzeit und Dauer in
+  # Minuten (Sanduhr auf der Startseite, aktiver Knopf im Tab "Steuerung")
+  - platform: homeassistant
+    id: ha${s}_wartung_rest
+    entity_id: sensor.aquarium${s}_wartung_rest
+  - platform: homeassistant
+    id: ha${s}_wartung_dauer
+    entity_id: sensor.aquarium${s}_wartung_rest
+    attribute: dauer
+    on_value:
+      - script.execute: refresh_maint
+  # Minuten, für die nach dem Füttern die Pause angeboten wird (0 = nicht fragen)
+  - platform: homeassistant
+    id: ha${s}_fpause
+    entity_id: sensor.aquarium${s}_wartung_rest
+    attribute: fuetterungspause
+
 binary_sensor:
   # Wartung läuft (packages/aquarium<s>_wartung.yaml)
   - platform: homeassistant
@@ -96,12 +113,19 @@ binary_sensor:
       - script.execute: refresh_maint
 
 text_sensor:
-  # Wartung: fertiger Text, z. B. "CO2-Anlage und Pumpe 30 min aus" oder
-  # "Aktiv, noch 23 min · tippen zum Beenden"
+  # Wartung: fertiger Text, z. B. "CO2 und Pumpe kurz aus", "Aktiv, noch 23 min" oder
+  # "Fütterung, noch 12 min"
   - platform: homeassistant
     id: ha${s}_wartung_text
     entity_id: sensor.aquarium${s}_wartung_rest
     attribute: text
+    on_value:
+      - script.execute: refresh_maint
+  # Dauern der beiden Wartungsknöpfe, z. B. "15,30" (wartung_minuten in einstellungen.yaml)
+  - platform: homeassistant
+    id: ha${s}_wartung_knoepfe
+    entity_id: sensor.aquarium${s}_wartung_rest
+    attribute: knoepfe
     on_value:
       - script.execute: refresh_maint
 

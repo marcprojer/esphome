@@ -3,7 +3,8 @@
 // Portierung von render() aus der HA-Karte www/aquarium-pixel-card.js (HA-Repo).
 // Die statische Szene (Voxel, Glas, Lampe, Boden) kommt aus aquarium_pixel_data.h,
 // erzeugt mit tools/aquarium_pixel_tablet_export.js im HA-Repo. Hier läuft nur die
-// Animation: Garnelen, CO2-Bläschen, Wasseroberfläche, Mondlicht, Trübung, "!".
+// Animation: Garnelen, CO2-Bläschen, Wasseroberfläche, Mondlicht, Trübung, "!",
+// Sanduhr bei Wartung bzw. Fütterungspause.
 //
 // Ausgabe: RGB565, doppelt vergrössert (1 Szenenpixel = 2x2 Displaypixel).
 #pragma once
@@ -76,6 +77,8 @@ class Tank {
     tn_ = light ? 0 : 1; tf_ = pump ? 1 : 0; tm_ = murk ? 1 : 0; co2_ = co2; warn_ = warn;
     if (first_) { night_ = tn_; flow_ = tf_; murk_ = tm_; first_ = false; }
   }
+  // Wartung bzw. Fütterungspause: verbleibender Anteil 0..1 (Sanduhr), < 0 = keine Pause
+  void set_pause(float f) { pause_ = f; }
   // Hervorhebung: während des Drückens wachsend, nach dem Umschalten kurz aufblitzen
   void press(int k, uint32_t now) { press_k_ = k; press_t0_ = now; }
   void release() { press_k_ = HL_NONE; }
@@ -185,6 +188,8 @@ class Tank {
         p[0] = c; p[1] = c; p[stride] = c; p[stride + 1] = c;
       }
     }
+    // Sanduhr rechts neben dem "!" während Wartung oder Fütterungspause
+    if (pause_ >= 0) sanduhr(11, 22, now, out, stride, pack);
   }
 
  private:
@@ -200,6 +205,7 @@ class Tank {
   uint32_t next_bubble_ = 0, seed_ = 0x2545F491;
   float ts_ = 0, night_ = 0, flow_ = 1, murk_ = 0, tn_ = 0, tf_ = 1, tm_ = 0;
   bool co2_ = true, warn_ = false, first_ = true;
+  float pause_ = -1;
   int press_k_ = HL_NONE, flash_k_ = HL_NONE;
   uint32_t press_t0_ = 0, flash_t0_ = 0;
 
@@ -240,6 +246,30 @@ class Tank {
       pset(sx - 2, sy + r, L, k); pset(sx - 1, sy + r, L, k);
       pset(sx, sy + r, R, k); pset(sx + 1, sy + r, R, k);
     }
+  }
+  // Sanduhr (7 x 9 Szenenpixel), gleiche Zeichnung wie sanduhr() in der HA-Karte
+  // www/aquarium-pixel-card.js: Deckel orange, Glas, Sand oben (füllt von unten) und unten
+  void sanduhr(int x0, int y0, uint32_t now, uint16_t *out, int stride, PackFn pack) const {
+    static const int8_t GLAS[14][2] = {{1, 1}, {5, 1}, {1, 2}, {5, 2}, {2, 3}, {4, 3}, {2, 4},
+                                       {4, 4}, {2, 5}, {4, 5}, {1, 6}, {5, 6}, {1, 7}, {5, 7}};
+    static const int8_t OBEN[7][2] = {{3, 3}, {2, 2}, {3, 2}, {4, 2}, {2, 1}, {3, 1}, {4, 1}};
+    static const int8_t UNTEN[7][2] = {{2, 7}, {3, 7}, {4, 7}, {2, 6}, {3, 6}, {4, 6}, {3, 5}};
+    const uint16_t deckel = pack(255, 122, 61), glas = pack(127, 166, 184), sand = pack(240, 200, 90),
+                   leer = pack(22, 34, 44);
+    auto px = [&](int x, int y, uint16_t c) {
+      x += x0; y += y0;
+      if (x < 0 || y < 0 || x >= CW || y >= CH) return;
+      uint16_t *p = out + (size_t) y * SCALE * stride + x * SCALE;
+      p[0] = c; p[1] = c; p[stride] = c; p[stride + 1] = c;
+    };
+    int oben = (int) ceilf(std::max(0.f, std::min(1.f, pause_)) * 7);
+    for (int x = 0; x < 7; x++) { px(x, 0, deckel); px(x, 8, deckel); }
+    for (auto &g : GLAS) px(g[0], g[1], glas);
+    for (int i = 0; i < 7; i++) {
+      px(OBEN[i][0], OBEN[i][1], i < oben ? sand : leer);
+      px(UNTEN[i][0], UNTEN[i][1], i < 7 - oben ? sand : leer);
+    }
+    px(3, 4, oben > 0 && (now / 300) % 2 == 0 ? sand : leer);  // rieselndes Korn
   }
   static constexpr int DIRS[8][2] = {{1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}, {0, -1}, {1, -1}};
   void step_shrimp(Shrimp &s, uint32_t now) {

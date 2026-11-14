@@ -1458,7 +1458,7 @@ script:
             lv_obj_set_style_radius(row, 12, LV_PART_MAIN);
             lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN);
             lv_obj_set_style_bg_color(row, lv_color_hex(0x121212), LV_PART_MAIN);
-            lv_obj_set_style_bg_color(row, lv_color_hex(0x1E1E1E), LV_PART_MAIN | LV_STATE_PRESSED);
+            lv_obj_set_style_bg_color(row, lv_color_hex(0x1E1E1E), LV_STATE_PRESSED);
             lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
             lv_obj_t *d = lv_obj_create(row);
@@ -1558,7 +1558,9 @@ lvgl:
     - tft
   touchscreens:
     - touch
-  disp_bg_color: 0x000000
+  bottom_layer:
+    bg_color: 0x000000
+    bg_opa: COVER
   default_font: inter_18
   theme:
     label:

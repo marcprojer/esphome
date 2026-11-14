@@ -1428,8 +1428,6 @@ script:
       - lambda: |-
           if (lv_obj_has_flag(id(fd_overlay), LV_OBJ_FLAG_HIDDEN)) return;
           bool t1 = id(tank) == 1;
-          std::string name = (t1 ? id(ha1_name) : id(ha_name))->state;
-          lv_label_set_text(id(fd_title), ("Fälligkeiten" + (name.empty() ? std::string("") : " · " + name)).c_str());
           lv_obj_t *list = id(fd_list);
           lv_obj_clean(list);
           lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
@@ -2838,7 +2836,7 @@ lvgl:
             radius: 0
             bg_color: 0x000000
             widgets:
-              - label: {id: fd_title, x: 24, y: 16, width: 360, long_mode: DOT, text: "Fälligkeiten", text_font: inter_22}
+              - label: {x: 24, y: 16, text: "Fälligkeiten", text_font: inter_22}
               - button:
                   x: 408
                   y: 4

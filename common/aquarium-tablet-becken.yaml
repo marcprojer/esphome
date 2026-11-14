@@ -165,6 +165,13 @@ text_sensor:
     attribute: futter_vorschlag
     on_value:
       - script.execute: refresh_care
+  # Liste "Fälligkeiten" (langer Druck auf den Tab "Pflege"), Zeilen "was|wann|datum|stufe|tab|eintrag"
+  - platform: homeassistant
+    id: ha${s}_care_due
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: faelligkeiten
+    on_value:
+      - script.execute: fd_fill
 
   # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube Garnelen"
   - platform: homeassistant

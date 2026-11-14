@@ -234,6 +234,11 @@ globals:
   - id: care_saved
     type: std::vector<uint32_t>
     initial_value: std::vector<uint32_t>(2, 0)
+  # Liste "Fälligkeiten": je angezeigte Zeile Unter-Tab und Eintrag (für den Sprung)
+  - id: fd_tab
+    type: std::vector<int>
+  - id: fd_entry
+    type: std::vector<std::string>
   # Fütterungspause: angebotene Minuten nach dem Speichern einer Fütterung (0 = nicht fragen)
   - id: fp_min
     type: int
@@ -295,6 +300,7 @@ font:
       - "\U000F05E1" # check-circle-outline
       - "\U000F0141" # chevron-left
       - "\U000F0142" # chevron-right
+      - "\U000F0156" # close (Liste Fälligkeiten)
   - file: "https://github.com/Templarian/MaterialDesign-Webfont/raw/v7.4.47/fonts/materialdesignicons-webfont.ttf"
     id: mdi_28
     size: 28
@@ -1139,6 +1145,7 @@ script:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
+      - lvgl.widget.hide: fd_overlay
       - lvgl.widget.hide: hdr_nav
       - lvgl.widget.show: hdr_title
       - lvgl.page.show: page_start
@@ -1407,11 +1414,114 @@ script:
                   minuten: !lambda return std::to_string(id(fp_min));
                   grund: Fütterung
 
+  # Liste "Fälligkeiten" des aktiven Beckens (langer Druck auf den Tab "Pflege"). Die Zeilen
+  # kommen fertig sortiert aus HA (Attribut "faelligkeiten" von sensor.aquarium<s>_tablet_pflege);
+  # ein Tipp springt in den passenden Unter-Tab und wählt den Eintrag aus
+  - id: fd_open
+    then:
+      - lvgl.widget.show: fd_overlay
+      - script.execute: fd_fill
+
+  # Liste neu aufbauen (nur wenn sichtbar; auch wenn HA neue Fälligkeiten schickt)
+  - id: fd_fill
+    then:
+      - lambda: |-
+          if (lv_obj_has_flag(id(fd_overlay), LV_OBJ_FLAG_HIDDEN)) return;
+          bool t1 = id(tank) == 1;
+          std::string name = (t1 ? id(ha1_name) : id(ha_name))->state;
+          lv_label_set_text(id(fd_title), ("Fälligkeiten" + (name.empty() ? std::string("") : " · " + name)).c_str());
+          lv_obj_t *list = id(fd_list);
+          lv_obj_clean(list);
+          lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+          lv_obj_set_style_pad_row(list, 6, LV_PART_MAIN);
+          auto rows = aqcare::parse_due((t1 ? id(ha1_care_due) : id(ha_care_due))->state);
+          id(fd_tab).clear();
+          id(fd_entry).clear();
+          for (auto &r : rows) { id(fd_tab).push_back(r.tab); id(fd_entry).push_back(r.eintrag); }
+          const lv_font_t *f18 = lv_obj_get_style_text_font(id(hdr_tab_water), LV_PART_MAIN);
+          const lv_font_t *f14 = lv_obj_get_style_text_font(id(st0_ww), LV_PART_MAIN);
+          // Punkt und Text "wann" je Stufe: später, heute/morgen, überfällig, noch nie
+          static const uint32_t dot[4] = {0x5C5C5C, 0xFF7A3D, 0xFF5C5C, 0x2A2A2A};
+          static const uint32_t txt[4] = {0x8C8C8C, 0xFF7A3D, 0xFF5C5C, 0x5C5C5C};
+          static const char *art[4] = {"", "", "Zugabe", "Fütterung"};
+          if (rows.empty()) {
+            lv_obj_t *l = lv_label_create(list);
+            lv_obj_set_style_text_font(l, f18, LV_PART_MAIN);
+            lv_obj_set_style_text_color(l, lv_color_hex(0x8C8C8C), LV_PART_MAIN);
+            lv_label_set_text(l, "Nichts mit Intervall eingerichtet");
+            return;
+          }
+          for (size_t i = 0; i < rows.size(); i++) {
+            auto &r = rows[i];
+            int st = r.stufe < 0 || r.stufe > 3 ? 0 : r.stufe;
+            lv_obj_t *row = lv_obj_create(list);
+            lv_obj_remove_style_all(row);
+            lv_obj_set_size(row, 448, 56);
+            lv_obj_set_style_radius(row, 12, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(row, lv_color_hex(0x121212), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(row, lv_color_hex(0x1E1E1E), LV_PART_MAIN | LV_STATE_PRESSED);
+            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_t *d = lv_obj_create(row);
+            lv_obj_remove_style_all(d);
+            lv_obj_set_size(d, 10, 10);
+            lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(d, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(d, lv_color_hex(dot[st]), LV_PART_MAIN);
+            lv_obj_clear_flag(d, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_align(d, LV_ALIGN_LEFT_MID, 16, 0);
+            lv_obj_t *n = lv_label_create(row);
+            lv_obj_set_style_text_font(n, f18, LV_PART_MAIN);
+            lv_obj_set_style_text_color(n, lv_color_hex(st == 3 ? 0x8C8C8C : 0xFFFFFF), LV_PART_MAIN);
+            lv_label_set_long_mode(n, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(n, 270);
+            lv_label_set_text(n, r.was.c_str());
+            lv_obj_align(n, LV_ALIGN_TOP_LEFT, 38, 7);
+            std::string sub = art[r.tab < 0 || r.tab > 3 ? 0 : r.tab];
+            if (!r.datum.empty()) sub += (sub.empty() ? "" : " · ") + r.datum;
+            lv_obj_t *u = lv_label_create(row);
+            lv_obj_set_style_text_font(u, f14, LV_PART_MAIN);
+            lv_obj_set_style_text_color(u, lv_color_hex(0x5C5C5C), LV_PART_MAIN);
+            lv_label_set_text(u, sub.c_str());
+            lv_obj_align(u, LV_ALIGN_TOP_LEFT, 38, 31);
+            lv_obj_t *w = lv_label_create(row);
+            lv_obj_set_style_text_font(w, f18, LV_PART_MAIN);
+            lv_obj_set_style_text_color(w, lv_color_hex(txt[st]), LV_PART_MAIN);
+            lv_label_set_text(w, r.wann.c_str());
+            lv_obj_align(w, LV_ALIGN_RIGHT_MID, -16, 0);
+            lv_obj_add_event_cb(row, [](lv_event_t *e) {
+              id(fd_jump)->execute((int) (intptr_t) lv_event_get_user_data(e));
+            }, LV_EVENT_CLICKED, (void *) (intptr_t) i);
+          }
+
+  # Tipp auf eine Zeile: Liste zu, Unter-Tab zeigen, Zusatz bzw. Futtersorte auswählen
+  - id: fd_jump
+    parameters:
+      i: int
+    then:
+      - lvgl.widget.hide: fd_overlay
+      - if:
+          condition:
+            lambda: return i >= 0 && i < (int) id(fd_tab).size() && id(fd_tab)[i] >= 1 && id(fd_tab)[i] <= 3;
+          then:
+            - lambda: |-
+                int k = id(fd_tab)[i] - 2;
+                auto &e = id(fd_entry)[i];
+                if (k >= 0 && !e.empty() && e != id(care_cur)[k]) {
+                  id(care_pick)[k] = e;
+                  id(care_val)[k] = 1.0f;
+                }
+            - script.execute:
+                id: show_care
+                v: !lambda return id(fd_tab)[i];
+
   - id: show_overview
     then:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
+      - lvgl.widget.hide: fd_overlay
       - lvgl.page.show: page_overview
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1423,6 +1533,7 @@ script:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
+      - lvgl.widget.hide: fd_overlay
       - lvgl.page.show: page_control
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
@@ -1434,6 +1545,7 @@ script:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
+      - lvgl.widget.hide: fd_overlay
       - lvgl.page.show: page_water
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1537,8 +1649,13 @@ lvgl:
                       bg_opa: TRANSP
                       pressed:
                         bg_opa: TRANSP
-                      on_click:
+                      # kurz: Tab zeigen; lang: dazu die Liste "Fälligkeiten" (on_short_click,
+                      # weil LVGL nach einem langen Druck auch "click" meldet)
+                      on_short_click:
                         - script.execute: show_water
+                      on_long_press:
+                        - script.execute: show_water
+                        - script.execute: fd_open
                       widgets:
                         - label: {id: hdr_tab_water, x: 12, y: 18, text: "Pflege", text_color: 0x5C5C5C}
                   - obj:
@@ -2709,3 +2826,36 @@ lvgl:
                     - script.execute: {id: fp_answer, ja: true}
                   widgets:
                     - label: {id: fp_yes_label, align: CENTER, text: "Ja", text_color: 0x000000}
+
+        # Liste "Fälligkeiten" (Skripte fd_open, fd_fill, fd_jump); Zeilen baut fd_fill
+        - obj:
+            id: fd_overlay
+            hidden: true
+            x: 0
+            y: 56
+            width: 480
+            height: 424
+            radius: 0
+            bg_color: 0x000000
+            widgets:
+              - label: {id: fd_title, x: 24, y: 16, width: 360, long_mode: DOT, text: "Fälligkeiten", text_font: inter_22}
+              - button:
+                  x: 408
+                  y: 4
+                  width: 64
+                  height: 52
+                  bg_opa: TRANSP
+                  pressed:
+                    bg_opa: TRANSP
+                  on_click:
+                    - lvgl.widget.hide: fd_overlay
+                  widgets:
+                    - label: {align: CENTER, text: "\U000F0156", text_font: mdi_24, text_color: 0x8C8C8C}
+              - obj:
+                  id: fd_list
+                  x: 16
+                  y: 60
+                  width: 448
+                  height: 356
+                  bg_opa: TRANSP
+                  radius: 0

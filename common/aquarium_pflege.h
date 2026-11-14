@@ -5,6 +5,12 @@
 //   name|einheit|einheit mehrzahl|schritt|info[|pause]
 // z. B. "Crusta Minerals|Löffel|Löffel|0.25|Pulver · alle 7 Tage · fällig in 3 Tagen".
 // Die Infos rechnet HA; hier wird nur zerlegt und formatiert.
+//
+// Liste "Fälligkeiten" (langer Druck auf den Tab "Pflege", Attribut "faelligkeiten"),
+// in HA schon sortiert, je Zeile:
+//   was|wann|datum|stufe|tab|eintrag
+// z. B. "Bacter AE|seit 1 Tag|13.11.|2|2|Bacter AE"; stufe 0 später, 1 heute/morgen,
+// 2 überfällig, 3 noch nie; tab = Unter-Tab (1 Wechsel, 2 Zugabe, 3 Futter).
 #pragma once
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +44,38 @@ inline std::vector<Item> parse(const std::string &s) {
       float st = strtof(f[3].c_str(), nullptr);
       out.push_back({f[0], f[1], f[2], f[4], st > 0 ? st : 0.5f, f.size() >= 6 && f[5] == "1"});
     }
+    a = e + 1;
+  }
+  return out;
+}
+
+// Zeilen in Felder zerlegen (Trenner '|')
+inline std::vector<std::string> fields(const std::string &line) {
+  std::vector<std::string> f;
+  size_t b = 0;
+  while (true) {
+    size_t p = line.find('|', b);
+    f.push_back(line.substr(b, p == std::string::npos ? std::string::npos : p - b));
+    if (p == std::string::npos) break;
+    b = p + 1;
+  }
+  return f;
+}
+
+struct Due {
+  std::string was, wann, datum, eintrag;
+  int stufe, tab;
+};
+
+inline std::vector<Due> parse_due(const std::string &s) {
+  std::vector<Due> out;
+  size_t a = 0;
+  while (a < s.size()) {
+    size_t e = s.find('\n', a);
+    if (e == std::string::npos) e = s.size();
+    auto f = fields(s.substr(a, e - a));
+    if (f.size() >= 6 && !f[0].empty())
+      out.push_back({f[0], f[1], f[2], f[5], atoi(f[3].c_str()), atoi(f[4].c_str())});
     a = e + 1;
   }
   return out;

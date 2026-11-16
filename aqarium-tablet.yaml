@@ -14,8 +14,9 @@ substitutions:
   room_temp_entity: sensor.aquarium_aquarium_monitor_temperature
   room_humidity_entity: sensor.aquarium_aquarium_monitor_humidity
   motion_entity: binary_sensor.bewegungsmelder_aqara_occupancy
-  # Becken 1 (Nano Cube Plants): bisher ist nur das Licht smart
-  tank1_light_entity: switch.aquarium_nano_cube_plants_led
+  # Becken 1 (Nano Cube Plants): Licht und CO2-Anlage (Pumpe und Sensoren folgen)
+  tank1_light_entity: switch.aquarium_aqarium1_led
+  tank1_co2_entity: switch.co2_anlage_1
 
   # Display sleep: off after this long without touch or motion,
   # motion does not wake the display during the night (touch always does)
@@ -159,7 +160,7 @@ interval:
                         (n == 0 && (id(ha_tds_jump).state || id(ha_tds_high).state));
             bool murk = !isnan(due) && due < 0;
             if (n == 0) aq_tank[0].set_target(on(id(ha_light)), on(id(ha_co2)), on(id(ha_pump)), murk, warn);
-            else aq_tank[1].set_target(on(id(ha1_light)), true, true, murk, warn);
+            else aq_tank[1].set_target(on(id(ha1_light)), on(id(ha1_co2)), true, murk, warn);
             // Sanduhr: Anteil der verbleibenden Zeit von Wartung bzw. Fütterungspause
             float rest = (n ? id(ha1_wartung_rest) : id(ha_wartung_rest))->state;
             float dauer = (n ? id(ha1_wartung_dauer) : id(ha_wartung_dauer))->state;
@@ -424,10 +425,20 @@ binary_sensor:
     on_state:
       - script.execute: refresh_hw
 
-  # Licht von Becken 1, bisher nur für die Startseite (Mondlicht, langer Druck)
+  # Becken 1: Licht und CO2-Anlage (Startseite, Übersicht, Steuerung)
   - platform: homeassistant
     id: ha1_light
     entity_id: ${tank1_light_entity}
+    trigger_on_initial_state: true
+    on_state:
+      - script.execute: refresh_hw
+
+  - platform: homeassistant
+    id: ha1_co2
+    entity_id: ${tank1_co2_entity}
+    trigger_on_initial_state: true
+    on_state:
+      - script.execute: refresh_hw
 
   - platform: homeassistant
     id: ha_tds_jump
@@ -930,16 +941,18 @@ script:
       - script.execute: refresh_room
       # Geräte: Akzent = an, grau = aus, orange = Pumpe aus (ungewöhnlich)
       - lambda: |-
+          // Becken 1: Pumpe noch nicht eingebunden (nullptr)
+          bool t1 = id(tank) != 0;
           struct Dev { binary_sensor::BinarySensor *ha; lv_obj_t *ov_icon, *ov_state, *ctl_icon, *ctl_state; bool warn_off; };
           const Dev devs[] = {
-            {id(ha_light), id(ov_light_icon), id(ov_light_state), id(ctl_light_icon), id(ctl_light_state), false},
-            {id(ha_co2), id(ov_co2_icon), id(ov_co2_state), id(ctl_co2_icon), id(ctl_co2_state), false},
-            {id(ha_pump), id(ov_pump_icon), id(ov_pump_state), id(ctl_pump_icon), id(ctl_pump_state), true},
+            {t1 ? id(ha1_light) : id(ha_light), id(ov_light_icon), id(ov_light_state), id(ctl_light_icon), id(ctl_light_state), false},
+            {t1 ? id(ha1_co2) : id(ha_co2), id(ov_co2_icon), id(ov_co2_state), id(ctl_co2_icon), id(ctl_co2_state), false},
+            {t1 ? nullptr : id(ha_pump), id(ov_pump_icon), id(ov_pump_state), id(ctl_pump_icon), id(ctl_pump_state), true},
           };
           for (auto &d : devs) {
             uint32_t icon, text;
             const char *ov, *ctl;
-            if (id(tank) != 0) {
+            if (d.ha == nullptr) {
               icon = 0x5C5C5C; text = 0x8C8C8C; ov = "--"; ctl = "Noch nicht eingebunden";
             } else if (d.ha->state) {
               icon = 0xD9A920; text = 0xFFFFFF; ov = "An"; ctl = "Eingeschaltet";
@@ -955,7 +968,7 @@ script:
           }
           lv_obj_t *sw[] = {id(ctl_light_switch), id(ctl_co2_switch), id(ctl_pump_switch)};
           for (int i = 0; i < 3; i++) {
-            if (id(tank) == 0 && devs[i].ha->state) lv_obj_add_state(sw[i], LV_STATE_CHECKED);
+            if (devs[i].ha != nullptr && devs[i].ha->state) lv_obj_add_state(sw[i], LV_STATE_CHECKED);
             else lv_obj_clear_state(sw[i], LV_STATE_CHECKED);
           }
 
@@ -1126,7 +1139,7 @@ script:
           if (phase == 0) { if (k != aqpx::HL_NONE) t.press(k, millis()); return; }
           const char *e = "";
           if (k == aqpx::HL_LAMP) e = n ? "${tank1_light_entity}" : "${light_entity}";
-          else if (k == aqpx::HL_CO2 && n == 0) e = "${co2_entity}";
+          else if (k == aqpx::HL_CO2) e = n ? "${tank1_co2_entity}" : "${co2_entity}";
           if (*e == 0) { t.release(); return; }
           t.flash(k, millis());
           id(press_entity) = e;
@@ -1883,14 +1896,11 @@ lvgl:
             width: 448
             height: 92
             on_click:
-              - if:
-                  condition:
-                    lambda: return id(tank) == 0;
-                  then:
-                    - homeassistant.action:
-                        action: homeassistant.toggle
-                        data:
-                          entity_id: ${light_entity}
+              - homeassistant.action:
+                  action: homeassistant.toggle
+                  data:
+                    entity_id: !lambda |-
+                      return id(tank) ? "${tank1_light_entity}" : "${light_entity}";
             widgets:
               - obj:
                   x: 20
@@ -1925,14 +1935,11 @@ lvgl:
             width: 448
             height: 92
             on_click:
-              - if:
-                  condition:
-                    lambda: return id(tank) == 0;
-                  then:
-                    - homeassistant.action:
-                        action: homeassistant.toggle
-                        data:
-                          entity_id: ${co2_entity}
+              - homeassistant.action:
+                  action: homeassistant.toggle
+                  data:
+                    entity_id: !lambda |-
+                      return id(tank) ? "${tank1_co2_entity}" : "${co2_entity}";
             widgets:
               - obj:
                   x: 20

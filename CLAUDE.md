@@ -21,13 +21,15 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 | Pin | GPIO | Sensor |
 |---|---|---|
 | D0 | GPIO0 | TDS-Sonde (ADC) |
-| D3 | GPIO21 | DS18B20 Wassertemperatur (1-Wire, 4,7 kΩ Pull-up nach 3V3) |
+| D1 | GPIO1 | TDS-Sonde 2 (ADC) |
+| D3 | GPIO21 | DS18B20 Wassertemperatur 1 + 2 (1-Wire, gemeinsamer 4,7 kΩ Pull-up nach 3V3, Unterscheidung per Adresse in den Substitutions) |
 | D6 / D7 | GPIO16 / 17 | I2C SDA / SCL: SHT41 Raumklima (0x44) |
 
 - **Wassertemperatur:** kalibriert am 30.10.2026 mit Eisbad und Siedepunkt (Zürich, ca. 410 m, 98,6 °C) über `calibrate_linear: -2.9 -> 0.0, 95.3 -> 98.6`. Der Fühler misst roh etwa 3 °C zu tief.
 - **TDS:**
   - Temperaturkompensation auf 25 °C, Faktor k = 1,0 (geprüft mit Zürcher Leitungswasser, ca. 170 ppm erwartet, 187 gemessen).
   - Ziel ist das Erkennen von Veränderungen, nicht absolute Genauigkeit.
+- **Zweites Sondenpaar** (Temperatur 2, TDS 2): später für Becken `aquarium1`, vorerst zum Vergleich im selben Becken (`TDS Difference` in %, `Water Temperature Difference` in °C, jeweils 2 gegenüber 1). Noch unkalibriert, ohne Trend-Sensoren.
 - **Trend-Sensoren:**
   - `TDS Rise Since Water Change` (%): Ausgangswert ist das 5-Minuten-Mittel 30 Minuten nach einem Wasserwechsel. Der Wasserwechsel kommt aus `sensor.aquarium_wasserwechsel_zeitpunkt` in HA; Einträge, die älter als 24 h sind, löschen den Ausgangswert.
   - `TDS Jump`: Abweichung zwischen 5-Minuten- und 1-Stunden-Mittel über 10 %.

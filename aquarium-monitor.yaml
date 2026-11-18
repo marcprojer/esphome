@@ -6,6 +6,10 @@ substitutions:
   tds_jump_threshold_pct: "10"
   # water change recommended once TDS rose this much above the post-change baseline
   tds_water_change_threshold_pct: "25"
+  # DS18B20 addresses on the shared 1-wire bus (from the log: "Found devices" / "Address")
+  # probe 1 = calibrated probe of aquarium (Garnelen), probe 2 = later aquarium1 (Plants)
+  water_temp_1_address: "0x14000000da3ae028"
+  water_temp_2_address: "0x0000000000000000"
 
 esphome:
   name: aquarium-monitor
@@ -113,7 +117,8 @@ i2c:
     scl: 17
     sda: 16
 
-# DS18B20 water temperature probe: data -> GPIO21 / D3 (4.7k pull-up to 3V3)
+# DS18B20 water temperature probes 1 + 2: data -> GPIO21 / D3, both on the same bus
+# (one shared 4.7k pull-up to 3V3), told apart by their address
 one_wire:
   - platform: gpio
     pin: GPIO21
@@ -133,6 +138,7 @@ sensor:
   - platform: dallas_temp
     id: sensor_water_temperature
     one_wire_id: one_wire_bus
+    address: ${water_temp_1_address}
     name: Water Temperature
     update_interval: 30s
     # calibrated 2026-10-30: ice bath and boiling water (Zurich ~410 m -> 98.6 °C)
@@ -140,6 +146,14 @@ sensor:
       - calibrate_linear:
           - -2.9 -> 0.0
           - 95.3 -> 98.6
+
+  # second probe, later for aquarium1 (not calibrated yet)
+  - platform: dallas_temp
+    id: sensor_water_temperature_2
+    one_wire_id: one_wire_bus
+    address: ${water_temp_2_address}
+    name: Water Temperature 2
+    update_interval: 30s
 
   # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0)
   - platform: adc
@@ -188,6 +202,72 @@ sensor:
       - sliding_window_moving_average:
           window_size: 12
           send_every: 1
+
+  # second TDS meter v1.0, later for aquarium1: signal (A) -> GPIO1 / D1 (ADC1_CH1)
+  - platform: adc
+    id: sensor_tds_2_voltage
+    pin: GPIO1
+    name: TDS 2 Voltage
+    attenuation: 12db
+    update_interval: 10s
+    accuracy_decimals: 3
+    unit_of_measurement: V
+    filters:
+      - median:
+          window_size: 7
+          send_every: 3
+
+  - platform: template
+    id: sensor_tds_2
+    name: TDS 2
+    unit_of_measurement: ppm
+    icon: mdi:water-opacity
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 30s
+    lambda: |-
+      float v = id(sensor_tds_2_voltage).state;
+      if (isnan(v)) return NAN;
+      float t = id(sensor_water_temperature_2).state;
+      if (isnan(t)) t = 25.0f;
+      float cv = v / (1.0f + 0.02f * (t - 25.0f));
+      float tds = (133.42f * cv * cv * cv - 255.86f * cv * cv + 857.39f * cv) * 0.5f;
+      return tds < 0 ? 0.0f : tds;
+
+  - platform: copy
+    id: sensor_tds_2_avg_5min
+    source_id: sensor_tds_2
+    internal: true
+    filters:
+      - throttle_average: 5min
+
+  # comparison while both probe pairs sit in the same tank (2 relative to 1)
+  - platform: template
+    name: TDS Difference
+    unit_of_measurement: "%"
+    icon: mdi:compare-horizontal
+    accuracy_decimals: 1
+    state_class: measurement
+    update_interval: 5min
+    lambda: |-
+      float a = id(sensor_tds_1_avg_5min).state;
+      float b = id(sensor_tds_2_avg_5min).state;
+      if (isnan(a) || isnan(b) || a < 1.0f) return NAN;
+      return (b - a) / a * 100.0f;
+
+  - platform: template
+    name: Water Temperature Difference
+    unit_of_measurement: "°C"
+    device_class: temperature
+    icon: mdi:compare-horizontal
+    accuracy_decimals: 2
+    state_class: measurement
+    update_interval: 60s
+    lambda: |-
+      float a = id(sensor_water_temperature).state;
+      float b = id(sensor_water_temperature_2).state;
+      if (isnan(a) || isnan(b)) return NAN;
+      return b - a;
 
   - platform: template
     id: sensor_tds_1_rise

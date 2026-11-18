@@ -9,7 +9,7 @@ substitutions:
   # DS18B20 addresses on the shared 1-wire bus (from the log: "Found devices" / "Address")
   # probe 1 = calibrated probe of aquarium (Garnelen), probe 2 = later aquarium1 (Plants)
   water_temp_1_address: "0x14000000da3ae028"
-  water_temp_2_address: "0x0000000000000000"
+  water_temp_2_address: "0xd5000000da42cf28"
 
 esphome:
   name: aquarium-monitor

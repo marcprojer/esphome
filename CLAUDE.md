@@ -22,11 +22,13 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
 |---|---|---|
 | D0 | GPIO0 | TDS-Sonde (ADC) |
 | D1 | GPIO1 | TDS-Sonde 2 (ADC) |
+| D4 / D5 | GPIO22 / 23 | VCC der TDS-Platine 1 / 2 (nur während der Messung an) |
 | D3 | GPIO21 | DS18B20 Wassertemperatur 1 + 2 (1-Wire, gemeinsamer 4,7 kΩ Pull-up nach 3V3, Unterscheidung per Adresse in den Substitutions) |
 | D6 / D7 | GPIO16 / 17 | I2C SDA / SCL: SHT41 Raumklima (0x44) |
 
 - **Wassertemperatur:** kalibriert am 30.10.2026 mit Eisbad und Siedepunkt (Zürich, ca. 410 m, 98,6 °C) über `calibrate_linear: -2.9 -> 0.0, 95.3 -> 98.6`. Der Fühler misst roh etwa 3 °C zu tief.
 - **TDS:**
+  - Zwei Sonden im selben Wasser stören sich gegenseitig (Sonde 1 fiel von ca. 268 auf 213 ppm, als Sonde 2 dazukam). Darum bekommt jede Platine ihren Strom über einen GPIO, und `script_measure_tds` misst alle 30 s nacheinander: einschalten, `tds_settle_time` warten, Median aus 3 Messungen, ausschalten.
   - Temperaturkompensation auf 25 °C, Faktor k = 1,0 (geprüft mit Zürcher Leitungswasser, ca. 170 ppm erwartet, 187 gemessen).
   - Ziel ist das Erkennen von Veränderungen, nicht absolute Genauigkeit.
 - **Zweites Sondenpaar** (Temperatur 2, TDS 2): später für Becken `aquarium1`, vorerst zum Vergleich im selben Becken (`TDS Difference` in %, `Water Temperature Difference` in °C, jeweils 2 gegenüber 1). Temperatur 2 nutzt vorerst die Kalibrierung von Fühler 1 (nicht eigens kalibriert), ohne Trend-Sensoren.

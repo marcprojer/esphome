@@ -10,6 +10,9 @@ substitutions:
   # probe 1 = calibrated probe of aquarium (Garnelen), probe 2 = later aquarium1 (Plants)
   water_temp_1_address: "0x14000000da3ae028"
   water_temp_2_address: "0xd5000000da42cf28"
+  # TDS probes in the same water disturb each other: each board gets its power from
+  # a GPIO and they are measured one after the other (settle time after power on)
+  tds_settle_time: 3s
 
 esphome:
   name: aquarium-monitor
@@ -69,6 +72,49 @@ script:
           id(tds_baseline) = tds;
           ESP_LOGI("tds", "Baseline captured: %.0f ppm", tds);
       - component.update: sensor_tds_1_rise
+
+  # power one TDS board, let it settle, take 3 readings (median), power it off again
+  - id: script_measure_tds
+    mode: single
+    then:
+      - switch.turn_off: tds_2_power
+      - switch.turn_on: tds_1_power
+      - delay: ${tds_settle_time}
+      - repeat:
+          count: 3
+          then:
+            - component.update: sensor_tds_1_voltage
+            - delay: 300ms
+      - switch.turn_off: tds_1_power
+      - component.update: sensor_tds_1
+      - delay: 1s
+      - switch.turn_on: tds_2_power
+      - delay: ${tds_settle_time}
+      - repeat:
+          count: 3
+          then:
+            - component.update: sensor_tds_2_voltage
+            - delay: 300ms
+      - switch.turn_off: tds_2_power
+      - component.update: sensor_tds_2
+
+interval:
+  - interval: 30s
+    then:
+      - script.execute: script_measure_tds
+
+# power for the TDS boards (VCC / + of the board), only on while measuring
+switch:
+  - platform: gpio
+    id: tds_1_power
+    pin: GPIO22  # D4
+    internal: true
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: tds_2_power
+    pin: GPIO23  # D5
+    internal: true
+    restore_mode: ALWAYS_OFF
 
 text_sensor:
   # water changes are logged in HA (packages/aquarium_logbuch.yaml)
@@ -160,19 +206,21 @@ sensor:
           - -2.9 -> 0.0
           - 95.3 -> 98.6
 
-  # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0)
+  # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0), VCC -> GPIO22 / D4
   - platform: adc
     id: sensor_tds_1_voltage
     pin: GPIO0
     name: TDS Voltage
     attenuation: 12db
-    update_interval: 10s
+    samples: 16
+    update_interval: never  # read by script_measure_tds
     accuracy_decimals: 3
     unit_of_measurement: V
     filters:
       - median:
-          window_size: 7
+          window_size: 3
           send_every: 3
+          send_first_at: 3
 
   - platform: template
     id: sensor_tds_1
@@ -181,7 +229,7 @@ sensor:
     icon: mdi:water-opacity
     accuracy_decimals: 0
     state_class: measurement
-    update_interval: 30s
+    update_interval: never  # updated by script_measure_tds
     lambda: |-
       float v = id(sensor_tds_1_voltage).state;
       if (isnan(v)) return NAN;
@@ -208,19 +256,22 @@ sensor:
           window_size: 12
           send_every: 1
 
-  # second TDS meter v1.0, later for aquarium1: signal (A) -> GPIO1 / D1 (ADC1_CH1)
+  # second TDS meter v1.0, later for aquarium1: signal (A) -> GPIO1 / D1 (ADC1_CH1),
+  # VCC -> GPIO23 / D5
   - platform: adc
     id: sensor_tds_2_voltage
     pin: GPIO1
     name: TDS 2 Voltage
     attenuation: 12db
-    update_interval: 10s
+    samples: 16
+    update_interval: never  # read by script_measure_tds
     accuracy_decimals: 3
     unit_of_measurement: V
     filters:
       - median:
-          window_size: 7
+          window_size: 3
           send_every: 3
+          send_first_at: 3
 
   - platform: template
     id: sensor_tds_2
@@ -229,7 +280,7 @@ sensor:
     icon: mdi:water-opacity
     accuracy_decimals: 0
     state_class: measurement
-    update_interval: 30s
+    update_interval: never  # updated by script_measure_tds
     lambda: |-
       float v = id(sensor_tds_2_voltage).state;
       if (isnan(v)) return NAN;

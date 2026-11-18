@@ -147,13 +147,18 @@ sensor:
           - -2.9 -> 0.0
           - 95.3 -> 98.6
 
-  # second probe, later for aquarium1 (not calibrated yet)
+  # second probe, later for aquarium1
   - platform: dallas_temp
     id: sensor_water_temperature_2
     one_wire_id: one_wire_bus
     address: ${water_temp_2_address}
     name: Water Temperature 2
     update_interval: 30s
+    # same correction as probe 1 for now (probe 2 itself not calibrated yet)
+    filters:
+      - calibrate_linear:
+          - -2.9 -> 0.0
+          - 95.3 -> 98.6
 
   # TDS meter v1.0: signal (A) -> GPIO0 / D0 (ADC1_CH0)
   - platform: adc

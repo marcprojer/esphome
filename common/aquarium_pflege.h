@@ -98,11 +98,11 @@ inline std::string options(const std::vector<Item> &l) {
   return o.empty() ? std::string("--") : o;
 }
 
-// Schnellwahl je Einheit (5 Werte)
+// Schnellwahl je Einheit (5 Werte); 0 = überspringen (Intervall läuft ab jetzt neu)
 inline const float *chips(const std::string &unit) {
-  static const float ml[5] = {0.5f, 1, 1.5f, 2, 3};
-  static const float loeffel[5] = {0.25f, 0.5f, 1, 1.5f, 2};
-  static const float stueck[5] = {0.5f, 1, 1.5f, 2, 3};
+  static const float ml[5] = {0, 0.5f, 1, 1.5f, 3};
+  static const float loeffel[5] = {0, 0.25f, 0.5f, 1, 1.5f};
+  static const float stueck[5] = {0, 0.5f, 1, 1.5f, 3};
   if (unit == "ml") return ml;
   if (unit == "Löffel") return loeffel;
   return stueck;

@@ -1260,7 +1260,7 @@ script:
               lv_label_set_text(v.name, it.name.c_str());
               lv_label_set_text(v.info, it.info.c_str());
               lv_obj_set_style_text_color(v.info, lv_color_hex(vorschlag ? 0xD9A920 : 0x8C8C8C), LV_PART_MAIN);
-              lv_label_set_text(v.unit, (val > 1 ? it.unitn : it.unit1).c_str());
+              lv_label_set_text(v.unit, val <= 0 ? "überspringen" : (val > 1 ? it.unitn : it.unit1).c_str());
             }
             lv_label_set_text(v.val, aqcare::fmt(val).c_str());
             const float *c = aqcare::chips(i < 0 ? std::string("") : items[i].unit1);
@@ -1271,10 +1271,11 @@ script:
               lv_obj_set_style_text_color(v.chipl[j], lv_color_hex(on ? 0x000000 : 0xFFFFFF), LV_PART_MAIN);
             }
             bool saved = id(care_saved)[k] && millis() - id(care_saved)[k] < 3000;
-            lv_label_set_text(v.save, saved ? "Gespeichert" : v.save_txt);
+            lv_label_set_text(v.save, saved ? "Gespeichert" : val <= 0 ? "Überspringen" : v.save_txt);
           }
 
-  # Menge ändern: d = +1/-1 Schritt (0.25 bzw. 0.5), sonst direkt auf "wert" (Schnellwahl)
+  # Menge ändern: d = +1/-1 Schritt (0.25 bzw. 0.5), sonst direkt auf "wert" (Schnellwahl).
+  # 0 = überspringen
   - id: care_amount
     parameters:
       k: int
@@ -1284,7 +1285,7 @@ script:
       - lambda: |-
           float st = id(care_step)[k];
           float x = d ? id(care_val)[k] + d * st : wert;
-          id(care_val)[k] = std::min(50.0f, std::max(st, x));
+          id(care_val)[k] = std::min(50.0f, std::max(0.0f, x));
       - script.execute: refresh_care
 
   # Auswahl öffnen (Roller mit allen Zusätzen bzw. Futtersorten)
@@ -1319,7 +1320,8 @@ script:
       - lvgl.widget.hide: pk_overlay
       - script.execute: refresh_care
 
-  # Speichern über script.aquarium<s>_zugabe_vom_tablet bzw. _futter_vom_tablet.
+  # Speichern über script.aquarium<s>_zugabe_vom_tablet bzw. _futter_vom_tablet (Menge 0 =
+  # überspringen: ueberspringen true, keine Rückfrage zur Fütterungspause).
   # Danach folgt die Auswahl wieder dem Vorschlag aus HA (nächster fälliger Eintrag).
   - id: save_care
     mode: single
@@ -1328,7 +1330,7 @@ script:
     then:
       - if:
           condition:
-            lambda: return !id(care_cur)[k].empty() && id(care_val)[k] > 0;
+            lambda: return !id(care_cur)[k].empty() && id(care_val)[k] >= 0;
           then:
             - if:
                 condition:
@@ -1339,6 +1341,8 @@ script:
                       data:
                         produkt: !lambda return id(care_cur)[0];
                         menge: !lambda return aqcare::fmt(id(care_val)[0]);
+                        ueberspringen: !lambda |-
+                          return id(care_val)[0] <= 0 ? "true" : "false";
             - if:
                 condition:
                   lambda: return k == 0 && id(tank) == 0;
@@ -1348,6 +1352,8 @@ script:
                       data:
                         produkt: !lambda return id(care_cur)[0];
                         menge: !lambda return aqcare::fmt(id(care_val)[0]);
+                        ueberspringen: !lambda |-
+                          return id(care_val)[0] <= 0 ? "true" : "false";
             - if:
                 condition:
                   lambda: return k == 1 && id(tank) == 1;
@@ -1357,6 +1363,8 @@ script:
                       data:
                         sorte: !lambda return id(care_cur)[1];
                         menge: !lambda return aqcare::fmt(id(care_val)[1]);
+                        ueberspringen: !lambda |-
+                          return id(care_val)[1] <= 0 ? "true" : "false";
             - if:
                 condition:
                   lambda: return k == 1 && id(tank) == 0;
@@ -1366,11 +1374,13 @@ script:
                       data:
                         sorte: !lambda return id(care_cur)[1];
                         menge: !lambda return aqcare::fmt(id(care_val)[1]);
+                        ueberspringen: !lambda |-
+                          return id(care_val)[1] <= 0 ? "true" : "false";
             - lambda: |-
                 // Futter: nach der Fütterungspause fragen, wenn die Futterart es will und HA sie
                 // anbietet (Attribut fuetterungspause > 0: CO2 oder Pumpe an, keine Pause läuft)
                 id(fp_min) = 0;
-                if (k == 1) {
+                if (k == 1 && id(care_val)[1] > 0) {
                   bool t1 = id(tank) == 1;
                   auto items = aqcare::parse((t1 ? id(ha1_care_fut) : id(ha_care_fut))->state);
                   int i = aqcare::find(items, id(care_cur)[1]);

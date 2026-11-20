@@ -235,11 +235,22 @@ globals:
   - id: care_saved
     type: std::vector<uint32_t>
     initial_value: std::vector<uint32_t>(2, 0)
-  # Liste "Fälligkeiten": je angezeigte Zeile Unter-Tab und Eintrag (für den Sprung)
+  # Liste "Fälligkeiten": je angezeigte Zeile Unter-Tab, Eintrag und Text (für den Sprung)
   - id: fd_tab
     type: std::vector<int>
   - id: fd_entry
     type: std::vector<std::string>
+  - id: fd_label
+    type: std::vector<std::string>
+  # Unterhalt im Unter-Tab "Wechsel": angezeigte Arbeiten (namen durch Komma) und die vom
+  # Benutzer abgewählten (alle anderen werden mit dem Wasserwechsel gespeichert)
+  - id: uh_namen
+    type: std::vector<std::string>
+  - id: uh_off
+    type: std::vector<std::string>
+  # Fenster Unterhalt (aus der Liste "Fälligkeiten"): Arbeiten durch Komma
+  - id: uh_pick
+    type: std::string
   # Fütterungspause: angebotene Minuten nach dem Speichern einer Fütterung (0 = nicht fragen)
   - id: fp_min
     type: int
@@ -886,9 +897,15 @@ script:
           text_color: !lambda |-
             float d = (id(tank) ? id(ha1_water_change_due) : id(ha_water_change_due))->state;
             return (!isnan(d) && d <= 0) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
+      - script.execute: uh_fill
       - lvgl.label.update:
           id: ww_save_label
-          text: !lambda return str_sprintf("%.1f L Wasserwechsel speichern", id(ww_liter));
+          text: !lambda |-
+            int n = 0;
+            for (auto &x : id(uh_namen))
+              if (std::find(id(uh_off).begin(), id(uh_off).end(), x) == id(uh_off).end()) n++;
+            if (n == 0) return str_sprintf("%.1f L Wasserwechsel speichern", id(ww_liter));
+            return str_sprintf("%.1f L + %d %s speichern", id(ww_liter), n, n == 1 ? "Arbeit" : "Arbeiten");
 
   - id: save_water_change
     mode: single
@@ -901,12 +918,30 @@ script:
                 action: script.aquarium1_wasserwechsel_vom_tablet
                 data:
                   liter: !lambda return str_sprintf("%.1f", id(ww_liter));
+                  unterhalt: !lambda |-
+                    std::string u;
+                    for (auto &x : id(uh_namen)) {
+                      if (std::find(id(uh_off).begin(), id(uh_off).end(), x) != id(uh_off).end()) continue;
+                      if (!u.empty()) u += ",";
+                      u += x;
+                    }
+                    return u;
           else:
             - homeassistant.action:
                 action: script.aquarium_wasserwechsel_vom_tablet
                 data:
                   liter: !lambda return str_sprintf("%.1f", id(ww_liter));
-      - lambda: id(ww_touched) = false;
+                  unterhalt: !lambda |-
+                    std::string u;
+                    for (auto &x : id(uh_namen)) {
+                      if (std::find(id(uh_off).begin(), id(uh_off).end(), x) != id(uh_off).end()) continue;
+                      if (!u.empty()) u += ",";
+                      u += x;
+                    }
+                    return u;
+      - lambda: |-
+          id(ww_touched) = false;
+          id(uh_off).clear();
       - lvgl.label.update: {id: ww_save_label, text: "Gespeichert"}
       - delay: 3s
       - script.execute: refresh_ww
@@ -1065,6 +1100,8 @@ script:
 
             float due = k.due->state;
             std::string ww = "Wasserwechsel " + days((int) due, !isnan(due));
+            auto &uh = (t ? id(ha1_uh_anzeige) : id(ha_uh_anzeige))->state;
+            if (!uh.empty() && uh != "unknown") ww += " + " + uh;
             lv_label_set_text(k.l_ww, ww.c_str());
             lv_obj_set_style_bg_color(k.d_ww, lv_color_hex(dot((int) due, !isnan(due))), LV_PART_MAIN);
 
@@ -1159,6 +1196,7 @@ script:
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
       - lvgl.widget.hide: fd_overlay
+      - lvgl.widget.hide: uh_overlay
       - lvgl.widget.hide: hdr_nav
       - lvgl.widget.show: hdr_title
       - lvgl.page.show: page_start
@@ -1458,13 +1496,14 @@ script:
           auto rows = aqcare::parse_due((t1 ? id(ha1_care_due) : id(ha_care_due))->state);
           id(fd_tab).clear();
           id(fd_entry).clear();
-          for (auto &r : rows) { id(fd_tab).push_back(r.tab); id(fd_entry).push_back(r.eintrag); }
+          id(fd_label).clear();
+          for (auto &r : rows) { id(fd_tab).push_back(r.tab); id(fd_entry).push_back(r.eintrag); id(fd_label).push_back(r.was); }
           const lv_font_t *f18 = lv_obj_get_style_text_font(id(hdr_tab_water), LV_PART_MAIN);
           const lv_font_t *f14 = lv_obj_get_style_text_font(id(st0_ww), LV_PART_MAIN);
           // Punkt und Text "wann" je Stufe: später, heute/morgen, überfällig, noch nie
           static const uint32_t dot[4] = {0x5C5C5C, 0xFF7A3D, 0xFF5C5C, 0x2A2A2A};
           static const uint32_t txt[4] = {0x8C8C8C, 0xFF7A3D, 0xFF5C5C, 0x5C5C5C};
-          static const char *art[4] = {"", "", "Zugabe", "Fütterung"};
+          static const char *art[5] = {"", "", "Zugabe", "Fütterung", "Unterhalt"};
           if (rows.empty()) {
             lv_obj_t *l = lv_label_create(list);
             lv_obj_set_style_text_font(l, f18, LV_PART_MAIN);
@@ -1499,7 +1538,7 @@ script:
             lv_obj_set_width(n, 270);
             lv_label_set_text(n, r.was.c_str());
             lv_obj_align(n, LV_ALIGN_TOP_LEFT, 38, 7);
-            std::string sub = art[r.tab < 0 || r.tab > 3 ? 0 : r.tab];
+            std::string sub = art[r.tab < 0 || r.tab > 4 ? 0 : r.tab];
             if (!r.datum.empty()) sub += (sub.empty() ? "" : " · ") + r.datum;
             lv_obj_t *u = lv_label_create(row);
             lv_obj_set_style_text_font(u, f14, LV_PART_MAIN);
@@ -1522,6 +1561,15 @@ script:
       i: int
     then:
       - lvgl.widget.hide: fd_overlay
+      - lvgl.widget.hide: uh_overlay
+      - if:
+          condition:
+            lambda: return i >= 0 && i < (int) id(fd_tab).size() && id(fd_tab)[i] == 4;
+          then:
+            - lambda: |-
+                id(uh_pick) = id(fd_entry)[i];
+                lv_label_set_text(id(uh_title), id(fd_label)[i].c_str());
+            - lvgl.widget.show: uh_overlay
       - if:
           condition:
             lambda: return i >= 0 && i < (int) id(fd_tab).size() && id(fd_tab)[i] >= 1 && id(fd_tab)[i] <= 3;
@@ -1537,12 +1585,89 @@ script:
                 id: show_care
                 v: !lambda return id(fd_tab)[i];
 
+  # Fenster Unterhalt: erledigt (ja = true) oder übersprungen
+  - id: uh_answer
+    parameters:
+      erledigt: bool
+    then:
+      - lvgl.widget.hide: uh_overlay
+      - if:
+          condition:
+            lambda: return id(tank) == 1 && !id(uh_pick).empty();
+          then:
+            - homeassistant.action:
+                action: script.aquarium1_unterhalt_vom_tablet
+                data:
+                  arbeiten: !lambda return id(uh_pick);
+                  ueberspringen: !lambda |-
+                    return erledigt ? "false" : "true";
+      - if:
+          condition:
+            lambda: return id(tank) == 0 && !id(uh_pick).empty();
+          then:
+            - homeassistant.action:
+                action: script.aquarium_unterhalt_vom_tablet
+                data:
+                  arbeiten: !lambda return id(uh_pick);
+                  ueberspringen: !lambda |-
+                    return erledigt ? "false" : "true";
+      - lambda: id(uh_pick).clear();
+
+  # Unter-Tab "Wechsel": Arbeiten, die mit diesem Wasserwechsel fällig sind, als Knöpfe
+  # (gelb = wird mitgespeichert, antippen = abwählen). Ohne Arbeiten die Box letzter/nächster
+  - id: uh_fill
+    then:
+      - lambda: |-
+          bool t1 = id(tank) == 1;
+          auto lines = aqcare::fields_lines((t1 ? id(ha1_care_uh) : id(ha_care_uh))->state);
+          lv_obj_t *list = id(uh_list);
+          lv_obj_clean(list);
+          lv_obj_set_flex_flow(list, LV_FLEX_FLOW_ROW_WRAP);
+          lv_obj_set_style_pad_row(list, 6, LV_PART_MAIN);
+          lv_obj_set_style_pad_column(list, 6, LV_PART_MAIN);
+          id(uh_namen).clear();
+          const lv_font_t *f14 = lv_obj_get_style_text_font(id(st0_ww), LV_PART_MAIN);
+          for (auto &f : lines) {
+            if (f.size() < 2 || f[1].empty()) continue;
+            size_t i = id(uh_namen).size();
+            id(uh_namen).push_back(f[1]);
+            bool on = std::find(id(uh_off).begin(), id(uh_off).end(), f[1]) == id(uh_off).end();
+            lv_obj_t *b = lv_obj_create(list);
+            lv_obj_remove_style_all(b);
+            lv_obj_set_size(b, LV_SIZE_CONTENT, 32);
+            lv_obj_set_style_radius(b, 16, LV_PART_MAIN);
+            lv_obj_set_style_pad_hor(b, 14, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(b, lv_color_hex(on ? 0xD9A920 : 0x121212), LV_PART_MAIN);
+            lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_t *l = lv_label_create(b);
+            lv_obj_set_style_text_font(l, f14, LV_PART_MAIN);
+            lv_obj_set_style_text_color(l, lv_color_hex(on ? 0x000000 : 0x8C8C8C), LV_PART_MAIN);
+            lv_label_set_text(l, f[0].c_str());
+            lv_obj_center(l);
+            lv_obj_add_event_cb(b, [](lv_event_t *e) {
+              size_t i = (size_t) (intptr_t) lv_event_get_user_data(e);
+              if (i >= id(uh_namen).size()) return;
+              auto &off = id(uh_off);
+              auto &n = id(uh_namen)[i];
+              auto it = std::find(off.begin(), off.end(), n);
+              if (it == off.end()) off.push_back(n); else off.erase(it);
+              // neu aufbauen erst nach dem Ereignis (der Knopf selbst wird dabei gelöscht)
+              lv_async_call([](void *) { id(refresh_ww)->execute(); }, nullptr);
+            }, LV_EVENT_CLICKED, (void *) (intptr_t) i);
+          }
+          bool any = !id(uh_namen).empty();
+          if (any) { lv_obj_clear_flag(list, LV_OBJ_FLAG_HIDDEN); lv_obj_add_flag(id(ww_info), LV_OBJ_FLAG_HIDDEN); }
+          else { lv_obj_add_flag(list, LV_OBJ_FLAG_HIDDEN); lv_obj_clear_flag(id(ww_info), LV_OBJ_FLAG_HIDDEN); }
+
   - id: show_overview
     then:
       - lvgl.widget.hide: ed_overlay
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
       - lvgl.widget.hide: fd_overlay
+      - lvgl.widget.hide: uh_overlay
       - lvgl.page.show: page_overview
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0xFFFFFF}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -1555,6 +1680,7 @@ script:
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
       - lvgl.widget.hide: fd_overlay
+      - lvgl.widget.hide: uh_overlay
       - lvgl.page.show: page_control
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0xFFFFFF}
@@ -1567,6 +1693,7 @@ script:
       - lvgl.widget.hide: pk_overlay
       - lvgl.widget.hide: fp_overlay
       - lvgl.widget.hide: fd_overlay
+      - lvgl.widget.hide: uh_overlay
       - lvgl.page.show: page_water
       - lvgl.label.update: {id: hdr_tab_overview, text_color: 0x5C5C5C}
       - lvgl.label.update: {id: hdr_tab_control, text_color: 0x5C5C5C}
@@ -2356,8 +2483,9 @@ lvgl:
                   widgets:
                     - label: {id: ww_chip_6_label, align: CENTER, text: "20 L"}
 
-              # letzter und nächster Wasserwechsel
+              # letzter und nächster Wasserwechsel (versteckt, wenn Unterhalt mit fällig ist)
               - obj:
+                  id: ww_info
                   x: 16
                   y: 200
                   width: 448
@@ -2366,6 +2494,16 @@ lvgl:
                     - label: {id: ww_last, x: 18, y: 12, width: 412, long_mode: DOT, text: "Letzter: --", text_font: inter_14, text_color: 0x8C8C8C}
                     - label: {id: ww_next, x: 18, y: 34, width: 412, long_mode: DOT, text: "Nächster: --", text_font: inter_14, text_color: 0x8C8C8C}
 
+              # Unterhalt mit diesem Wechsel (Knöpfe baut uh_fill)
+              - obj:
+                  id: uh_list
+                  hidden: true
+                  x: 16
+                  y: 198
+                  width: 448
+                  height: 70
+                  bg_opa: TRANSP
+                  radius: 0
               - button:
                   id: ww_save
                   x: 16
@@ -2843,6 +2981,66 @@ lvgl:
                     - script.execute: {id: fp_answer, ja: true}
                   widgets:
                     - label: {id: fp_yes_label, align: CENTER, text: "Ja", text_color: 0x000000}
+
+        # Unterhalt aus der Liste "Fälligkeiten": erledigt oder überspringen (Skript uh_answer)
+        - obj:
+            id: uh_overlay
+            hidden: true
+            x: 0
+            y: 56
+            width: 480
+            height: 424
+            radius: 0
+            bg_color: 0x000000
+            widgets:
+              - obj:
+                  x: 16
+                  y: 16
+                  width: 448
+                  height: 300
+                  widgets:
+                    - obj:
+                        x: 198
+                        y: 28
+                        width: 52
+                        height: 52
+                        radius: 26
+                        bg_color: 0x1E1E1E
+                        widgets:
+                          - label: {align: CENTER, text: "\U000F05B7", text_font: mdi_28, text_color: 0xD9A920}
+                    - label: {x: 0, y: 100, width: 448, text_align: CENTER, text: "Unterhalt", text_font: inter_18, text_color: 0xD9A920}
+                    - label: {id: uh_title, x: 24, y: 136, width: 400, text_align: CENTER, text: "", text_font: inter_22}
+                    - label: {x: 0, y: 236, width: 448, text_align: CENTER, text: "Überspringen: der Takt läuft ab heute neu", text_font: inter_14, text_color: 0x8C8C8C}
+              - button:
+                  x: 16
+                  y: 332
+                  width: 140
+                  height: 76
+                  on_click:
+                    - lvgl.widget.hide: uh_overlay
+                  widgets:
+                    - label: {align: CENTER, text: "Abbrechen", text_color: 0x8C8C8C}
+              - button:
+                  x: 170
+                  y: 332
+                  width: 140
+                  height: 76
+                  on_click:
+                    - script.execute: {id: uh_answer, erledigt: false}
+                  widgets:
+                    - label: {align: CENTER, text: "Überspringen"}
+              - button:
+                  x: 324
+                  y: 332
+                  width: 140
+                  height: 76
+                  bg_color: 0xD9A920
+                  pressed:
+                    bg_color: 0xB08A18
+                  on_click:
+                    - script.execute: {id: uh_answer, erledigt: true}
+                  widgets:
+                    - label: {align: CENTER, text: "Erledigt", text_color: 0x000000}
 
         # Liste "Fälligkeiten" (Skripte fd_open, fd_fill, fd_jump); Zeilen baut fd_fill
         - obj:

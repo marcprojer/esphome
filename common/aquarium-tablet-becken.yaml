@@ -165,6 +165,20 @@ text_sensor:
     attribute: futter_vorschlag
     on_value:
       - script.execute: refresh_care
+  # Unterhalt mit dem nächsten Wasserwechsel (Unter-Tab "Wechsel"), Zeilen "label|namen"
+  - platform: homeassistant
+    id: ha${s}_care_uh
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: unterhalt
+    on_value:
+      - script.execute: refresh_ww
+  # Zusatz für die Zeile Wasserwechsel auf der Startseite, z. B. "Filter, Bodengrund"
+  - platform: homeassistant
+    id: ha${s}_uh_anzeige
+    entity_id: sensor.aquarium${s}_tablet_pflege
+    attribute: unterhalt_anzeige
+    on_value:
+      - script.execute: refresh_start
   # Liste "Fälligkeiten" (langer Druck auf den Tab "Pflege"), Zeilen "was|wann|datum|stufe|tab|eintrag"
   - platform: homeassistant
     id: ha${s}_care_due

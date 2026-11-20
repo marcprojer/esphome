@@ -10,8 +10,12 @@
 // in HA schon sortiert, je Zeile:
 //   was|wann|datum|stufe|tab|eintrag
 // z. B. "Bacter AE|seit 1 Tag|13.11.|2|2|Bacter AE"; stufe 0 später, 1 heute/morgen,
-// 2 überfällig, 3 noch nie; tab = Unter-Tab (1 Wechsel, 2 Zugabe, 3 Futter).
+// 2 überfällig, 3 noch nie; tab = Unter-Tab (1 Wechsel, 2 Zugabe, 3 Futter, 4 Unterhalt:
+// Fenster Erledigt/Überspringen, eintrag = Arbeiten durch Komma).
+//
+// Unterhalt mit dem nächsten Wasserwechsel (Attribut "unterhalt"): Zeilen "label|namen".
 #pragma once
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -60,6 +64,19 @@ inline std::vector<std::string> fields(const std::string &line) {
     b = p + 1;
   }
   return f;
+}
+
+// Alle Zeilen eines Attributs in Felder zerlegt (leere Zeilen weggelassen)
+inline std::vector<std::vector<std::string>> fields_lines(const std::string &s) {
+  std::vector<std::vector<std::string>> out;
+  size_t a = 0;
+  while (a < s.size()) {
+    size_t e = s.find('\n', a);
+    if (e == std::string::npos) e = s.size();
+    if (e > a) out.push_back(fields(s.substr(a, e - a)));
+    a = e + 1;
+  }
+  return out;
 }
 
 struct Due {

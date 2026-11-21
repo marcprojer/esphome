@@ -17,6 +17,13 @@ substitutions:
   # Becken 1 (Nano Cube Plants): Licht und CO2-Anlage (Pumpe und Sensoren folgen)
   tank1_light_entity: switch.aquarium_aqarium1_led
   tank1_co2_entity: switch.co2_anlage_1
+  # Becken 1: Sonde 2 des Aquarium Monitors
+  tank1_water_temp_entity: sensor.aquarium_aquarium_monitor_water_temperature_2
+  tank1_tds_entity: sensor.aquarium_aquarium_monitor_tds_2
+  tank1_tds_rise_entity: sensor.aquarium_aquarium_monitor_tds_2_rise_since_water_change
+  tank1_water_temp_24h_entity: sensor.aquarium1_wassertemperatur_anderung_24h
+  tank1_tds_jump_entity: binary_sensor.aquarium_aquarium_monitor_tds_2_jump
+  tank1_tds_high_entity: binary_sensor.aquarium_aquarium_monitor_water_change_recommended_2
 
   # Display sleep: off after this long without touch or motion,
   # motion does not wake the display during the night (touch always does)
@@ -157,7 +164,7 @@ interval:
             float oor = (n ? id(ha1_out_of_range_count) : id(ha_out_of_range_count))->state;
             float nw = (n ? id(ha1_warn_count) : id(ha_warn_count))->state;
             bool warn = (!isnan(oor) && oor >= 1) || (!isnan(nw) && nw >= 1) ||
-                        (n == 0 && (id(ha_tds_jump).state || id(ha_tds_high).state));
+                        (n ? id(ha1_tds_jump) : id(ha_tds_jump))->state || (n ? id(ha1_tds_high) : id(ha_tds_high))->state;
             bool murk = !isnan(due) && due < 0;
             if (n == 0) aq_tank[0].set_target(on(id(ha_light)), on(id(ha_co2)), on(id(ha_pump)), murk, warn);
             else aq_tank[1].set_target(on(id(ha1_light)), on(id(ha1_co2)), true, murk, warn);
@@ -465,6 +472,22 @@ binary_sensor:
     on_state:
       - script.execute: refresh_status
 
+  - platform: homeassistant
+    id: ha1_tds_jump
+    entity_id: ${tank1_tds_jump_entity}
+    trigger_on_initial_state: true
+    on_state:
+      - script.execute: refresh_status
+      - script.execute: refresh_start
+
+  - platform: homeassistant
+    id: ha1_tds_high
+    entity_id: ${tank1_tds_high_entity}
+    trigger_on_initial_state: true
+    on_state:
+      - script.execute: refresh_status
+      - script.execute: refresh_start
+
 sensor:
   - platform: homeassistant
     id: ha_water_temp
@@ -490,6 +513,34 @@ sensor:
   - platform: homeassistant
     id: ha_water_temp_24h
     entity_id: ${water_temp_24h_entity}
+    on_value:
+      - script.execute: refresh_start_values
+
+  # Becken 1: Sonde 2 des Aquarium Monitors
+  - platform: homeassistant
+    id: ha1_water_temp
+    entity_id: ${tank1_water_temp_entity}
+    on_value:
+      - script.execute: refresh_hw
+      - script.execute: refresh_start_values
+
+  - platform: homeassistant
+    id: ha1_tds
+    entity_id: ${tank1_tds_entity}
+    on_value:
+      - script.execute: refresh_hw
+      - script.execute: refresh_start_values
+
+  - platform: homeassistant
+    id: ha1_tds_rise
+    entity_id: ${tank1_tds_rise_entity}
+    on_value:
+      - script.execute: refresh_hw
+      - script.execute: refresh_start_values
+
+  - platform: homeassistant
+    id: ha1_water_temp_24h
+    entity_id: ${tank1_water_temp_24h_entity}
     on_value:
       - script.execute: refresh_start_values
 
@@ -538,8 +589,8 @@ script:
           text: !lambda |-
             float t = id(ha_room_temp).state;
             float h = id(ha_room_humidity).state;
-            // Sensoren des Aquarium Monitors gehören zu Becken 0
-            if (id(tank) != 0 || isnan(t)) return std::string("Raum --");
+            // Raumwerte des Aquarium Monitors gelten für beide Becken (gleicher Raum)
+            if (isnan(t)) return std::string("Raum --");
             if (isnan(h)) return str_sprintf("Raum %.1f °C", t);
             return str_sprintf("Raum %.1f °C · %.0f %%", t, h);
 
@@ -548,14 +599,16 @@ script:
     then:
       - if:
           condition:
-            lambda: return id(tank) == 0 && id(ha_tds_jump).state;
+            lambda: |-
+              return (id(tank) ? id(ha1_tds_jump) : id(ha_tds_jump))->state;
           then:
             - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF5C5C}
             - lvgl.label.update: {id: ov_status_text, text: "TDS-Sprung erkannt", text_color: 0xFF5C5C}
           else:
             - if:
                 condition:
-                  lambda: return id(tank) == 0 && id(ha_tds_high).state;
+                  lambda: |-
+                    return (id(tank) ? id(ha1_tds_high) : id(ha_tds_high))->state;
                 then:
                   - lvgl.label.update: {id: ov_status_icon, text: "\U000F0026", text_color: 0xFF7A3D}
                   - lvgl.label.update: {id: ov_status_text, text: "TDS zu hoch", text_color: 0xFF7A3D}
@@ -596,7 +649,7 @@ script:
       - lvgl.label.update:
           id: ov_tds_rise
           text_color: !lambda |-
-            return (id(tank) == 0 && id(ha_tds_high).state) ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
+            return (id(tank) ? id(ha1_tds_high) : id(ha_tds_high))->state ? lv_color_hex(0xFF7A3D) : lv_color_hex(0x8C8C8C);
 
   - id: refresh_water_change
     then:
@@ -946,25 +999,24 @@ script:
       - delay: 3s
       - script.execute: refresh_ww
 
-  # Hardware (Licht, CO2, Pumpe, Monitor, Leistung) gibt es vorerst nur für Becken 0.
-  # Bei Becken 1 zeigen die Kacheln "--" und die Steuerung ist gesperrt.
+  # Übersicht und Steuerung des aktiven Beckens. Becken 1: Licht, CO2 und Sonde 2 des Monitors;
+  # Pumpe und Leistung fehlen noch ("--" bzw. "Noch nicht eingebunden").
   - id: refresh_hw
     then:
       - lvgl.label.update:
           id: ov_water_temp
           text: !lambda |-
-            float x = id(ha_water_temp).state;
-            return (id(tank) != 0 || isnan(x)) ? std::string("--") : str_sprintf("%.1f", x);
+            float x = (id(tank) ? id(ha1_water_temp) : id(ha_water_temp))->state;
+            return isnan(x) ? std::string("--") : str_sprintf("%.1f", x);
       - lvgl.label.update:
           id: ov_tds
           text: !lambda |-
-            float x = id(ha_tds).state;
-            return (id(tank) != 0 || isnan(x)) ? std::string("--") : str_sprintf("%.0f", x);
+            float x = (id(tank) ? id(ha1_tds) : id(ha_tds))->state;
+            return isnan(x) ? std::string("--") : str_sprintf("%.0f", x);
       - lvgl.label.update:
           id: ov_tds_rise
           text: !lambda |-
-            if (id(tank) != 0) return std::string("Sensoren folgen");
-            float x = id(ha_tds_rise).state;
+            float x = (id(tank) ? id(ha1_tds_rise) : id(ha_tds_rise))->state;
             if (isnan(x)) return std::string("Seit Wasserwechsel: --");
             return str_sprintf("Seit Wasserwechsel: %+.0f %%", x);
       - lvgl.label.update:
@@ -1127,13 +1179,13 @@ script:
             lv_label_set_text(k.l_food, fk ? fd.c_str() : "Fütterung --");
             lv_obj_set_style_bg_color(k.d_food, lv_color_hex(!fk ? 0x5C5C5C : fl >= 2 ? 0xFF7A3D : fl == 1 ? 0xD9A920 : 0x4CAF50), LV_PART_MAIN);
 
-            // Status: TDS (nur Becken 0) > Warnungen aus HA > Werte ausser Soll > ok
+            // Status: TDS > Warnungen aus HA > Werte ausser Soll > ok
             std::string st; uint32_t col;
             int oor = isnan(k.oor->state) ? 0 : (int) k.oor->state;
             int nw = isnan(k.warn->state) ? 0 : (int) k.warn->state;
             std::string wt = k.wtext->state;
-            if (t == 0 && id(ha_tds_jump).state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; }
-            else if (t == 0 && id(ha_tds_high).state) { st = "TDS zu hoch"; col = 0xFF7A3D; }
+            if ((t ? id(ha1_tds_jump) : id(ha_tds_jump))->state) { st = "TDS-Sprung erkannt"; col = 0xFF5C5C; }
+            else if ((t ? id(ha1_tds_high) : id(ha_tds_high))->state) { st = "TDS zu hoch"; col = 0xFF7A3D; }
             else if (nw >= 1) {
               st = (wt.empty() || wt == "unknown") ? str_sprintf("%d Warnungen", nw) : (nw > 1 ? wt + str_sprintf(" (+%d)", nw - 1) : wt);
               col = 0xFF7A3D;
@@ -1144,20 +1196,26 @@ script:
             lv_obj_set_style_bg_color(k.d_status, lv_color_hex(col), LV_PART_MAIN);
           }
 
-  # Startseite: Wassertemperatur und TDS unter dem Namen (nur Becken 0 hat den Monitor).
+  # Startseite: Wassertemperatur und TDS unter dem Namen (Sonde 1 Becken 0, Sonde 2 Becken 1).
   # Links Temperatur mit Änderung seit 24 h, rechts TDS mit Anstieg seit dem Wasserwechsel
   # (ab 25 % orange, wie die HA-Karte). Wert weiss, Veränderung grau darunter.
   - id: refresh_start_values
     then:
       - lambda: |-
-          float t = id(ha_water_temp).state, t24 = id(ha_water_temp_24h).state;
-          float d = id(ha_tds).state, r = id(ha_tds_rise).state;
-          if (!isnan(t24) && fabsf(t24) < 0.05f) t24 = 0;
-          lv_label_set_text(id(st0_temp), isnan(t) ? "" : str_sprintf("%.1f °C", t).c_str());
-          lv_label_set_text(id(st0_temp_d), (isnan(t) || isnan(t24)) ? "" : str_sprintf("%+.1f°", t24).c_str());
-          lv_label_set_text(id(st0_tds), isnan(d) ? "" : str_sprintf("%.0f ppm", d).c_str());
-          lv_label_set_text(id(st0_tds_d), (isnan(d) || isnan(r)) ? "" : str_sprintf("%+.0f %%", r).c_str());
-          lv_obj_set_style_text_color(id(st0_tds_d), lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
+          struct V { sensor::Sensor *t, *t24, *d, *r; lv_obj_t *lt, *ltd, *ld, *ldd; };
+          const V vs[2] = {
+            {id(ha_water_temp), id(ha_water_temp_24h), id(ha_tds), id(ha_tds_rise), id(st0_temp), id(st0_temp_d), id(st0_tds), id(st0_tds_d)},
+            {id(ha1_water_temp), id(ha1_water_temp_24h), id(ha1_tds), id(ha1_tds_rise), id(st1_temp), id(st1_temp_d), id(st1_tds), id(st1_tds_d)},
+          };
+          for (auto &v : vs) {
+            float t = v.t->state, t24 = v.t24->state, d = v.d->state, r = v.r->state;
+            if (!isnan(t24) && fabsf(t24) < 0.05f) t24 = 0;
+            lv_label_set_text(v.lt, isnan(t) ? "" : str_sprintf("%.1f °C", t).c_str());
+            lv_label_set_text(v.ltd, (isnan(t) || isnan(t24)) ? "" : str_sprintf("%+.1f°", t24).c_str());
+            lv_label_set_text(v.ld, isnan(d) ? "" : str_sprintf("%.0f ppm", d).c_str());
+            lv_label_set_text(v.ldd, (isnan(d) || isnan(r)) ? "" : str_sprintf("%+.0f %%", r).c_str());
+            lv_obj_set_style_text_color(v.ldd, lv_color_hex(!isnan(r) && r >= 25 ? 0xFF7A3D : 0x8C8C8C), LV_PART_MAIN);
+          }
 
   # Startseite: Berührung eines Beckens. phase 0 = Druck, 1 = Loslassen, 2 = langer Druck.
   # Lampe bzw. Diffusor leuchten beim Drücken auf; ein langer Druck darauf schaltet

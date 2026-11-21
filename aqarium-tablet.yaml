@@ -978,11 +978,14 @@ script:
       - lambda: |-
           // Becken 1: Pumpe noch nicht eingebunden (nullptr)
           bool t1 = id(tank) != 0;
-          struct Dev { binary_sensor::BinarySensor *ha; lv_obj_t *ov_icon, *ov_state, *ctl_icon, *ctl_state; bool warn_off; };
+          // plan: Zeitplan aus einstellungen.yaml, z. B. "13:00–20:00" (nullptr = keiner)
+          struct Dev { binary_sensor::BinarySensor *ha; lv_obj_t *ov_icon, *ov_state, *ctl_icon, *ctl_state; bool warn_off; text_sensor::TextSensor *plan; };
           const Dev devs[] = {
-            {t1 ? id(ha1_light) : id(ha_light), id(ov_light_icon), id(ov_light_state), id(ctl_light_icon), id(ctl_light_state), false},
-            {t1 ? id(ha1_co2) : id(ha_co2), id(ov_co2_icon), id(ov_co2_state), id(ctl_co2_icon), id(ctl_co2_state), false},
-            {t1 ? nullptr : id(ha_pump), id(ov_pump_icon), id(ov_pump_state), id(ctl_pump_icon), id(ctl_pump_state), true},
+            {t1 ? id(ha1_light) : id(ha_light), id(ov_light_icon), id(ov_light_state), id(ctl_light_icon), id(ctl_light_state), false,
+             t1 ? id(ha1_licht_plan) : id(ha_licht_plan)},
+            {t1 ? id(ha1_co2) : id(ha_co2), id(ov_co2_icon), id(ov_co2_state), id(ctl_co2_icon), id(ctl_co2_state), false,
+             t1 ? id(ha1_co2_plan) : id(ha_co2_plan)},
+            {t1 ? nullptr : id(ha_pump), id(ov_pump_icon), id(ov_pump_state), id(ctl_pump_icon), id(ctl_pump_state), true, nullptr},
           };
           for (auto &d : devs) {
             uint32_t icon, text;
@@ -999,7 +1002,10 @@ script:
             lv_obj_set_style_text_color(d.ctl_icon, lv_color_hex(icon), LV_PART_MAIN);
             lv_obj_set_style_text_color(d.ov_state, lv_color_hex(text), LV_PART_MAIN);
             lv_label_set_text(d.ov_state, ov);
-            lv_label_set_text(d.ctl_state, ctl);
+            std::string c = ctl;
+            if (d.ha != nullptr && d.plan != nullptr && !d.plan->state.empty() && d.plan->state != "unknown")
+              c += " · " + d.plan->state;
+            lv_label_set_text(d.ctl_state, c.c_str());
           }
           lv_obj_t *sw[] = {id(ctl_light_switch), id(ctl_co2_switch), id(ctl_pump_switch)};
           for (int i = 0; i < 3; i++) {
@@ -2050,7 +2056,7 @@ lvgl:
                   widgets:
                     - label: {id: ctl_light_icon, align: CENTER, text: "\U000F0335", text_font: mdi_28, text_color: 0x5C5C5C}
               - label: {x: 90, y: 18, text: "Licht", text_font: inter_22}
-              - label: {id: ctl_light_state, x: 90, y: 52, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: ctl_light_state, x: 90, y: 52, width: 260, height: 18, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
               - switch:
                   id: ctl_light_switch
                   x: 364
@@ -2089,7 +2095,7 @@ lvgl:
                   widgets:
                     - label: {id: ctl_co2_icon, align: CENTER, text: "\U000F07E4", text_font: mdi_28, text_color: 0x5C5C5C}
               - label: {x: 90, y: 18, text: "CO2-Anlage", text_font: inter_22}
-              - label: {id: ctl_co2_state, x: 90, y: 52, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
+              - label: {id: ctl_co2_state, x: 90, y: 52, width: 260, height: 18, long_mode: DOT, text: "--", text_font: inter_14, text_color: 0x8C8C8C}
               - switch:
                   id: ctl_co2_switch
                   x: 364

@@ -187,6 +187,20 @@ text_sensor:
     on_value:
       - script.execute: fd_fill
 
+  # Zeitplan aus einstellungen.yaml als Text, z. B. "13:00–20:00" (Tab "Steuerung")
+  - platform: homeassistant
+    id: ha${s}_licht_plan
+    entity_id: sensor.aquarium${s}_einstellungen
+    attribute: licht_plan
+    on_value:
+      - script.execute: refresh_hw
+  - platform: homeassistant
+    id: ha${s}_co2_plan
+    entity_id: sensor.aquarium${s}_einstellungen
+    attribute: co2_plan
+    on_value:
+      - script.execute: refresh_hw
+
   # Anzeigename aus einstellungen.yaml, z. B. "Nano Cube Garnelen"
   - platform: homeassistant
     id: ha${s}_name

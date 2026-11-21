@@ -56,6 +56,8 @@ esphome:
     - common/aquarium_pixel_data.h
     # Tab "Pflege": Zusätze und Futter
     - common/aquarium_pflege.h
+    # LVGL-Flags (hidden, clickable, scrollable) ohne Warnungen je nach LVGL-Version
+    - common/aquarium_lv.h
   on_boot:
     priority: -100
     then:
@@ -1081,8 +1083,8 @@ script:
           lv_obj_t *lb[2] = {id(ctl_maint_b0_label), id(ctl_maint_b1_label)};
           for (int i = 0; i < 2; i++) {
             int m = aqcare::knopf((t1 ? id(ha1_wartung_knoepfe) : id(ha_wartung_knoepfe))->state, i);
-            if (m <= 0) { lv_obj_add_flag(bt[i], LV_OBJ_FLAG_HIDDEN); continue; }
-            lv_obj_clear_flag(bt[i], LV_OBJ_FLAG_HIDDEN);
+            if (m <= 0) { aqlv::hidden(bt[i], true); continue; }
+            aqlv::hidden(bt[i], false);
             lv_label_set_text(lb[i], (std::to_string(m) + " min").c_str());
             bool act = on && !isnan(dauer) && (int) dauer == m;
             lv_obj_set_style_bg_color(bt[i], lv_color_hex(act ? 0xFF7A3D : 0x2A2A2A), LV_PART_MAIN);
@@ -1303,7 +1305,7 @@ script:
           lv_obj_t *segs[4] = {id(wt_seg_values), id(wt_seg_change), id(wt_seg_dose), id(wt_seg_food)};
           lv_obj_t *lbls[4] = {id(wt_seg_values_label), id(wt_seg_change_label), id(wt_seg_dose_label), id(wt_seg_food_label)};
           for (int i = 0; i < 4; i++) {
-            if (i == v) lv_obj_clear_flag(views[i], LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(views[i], LV_OBJ_FLAG_HIDDEN);
+            if (i == v) aqlv::hidden(views[i], false); else aqlv::hidden(views[i], true);
             lv_obj_set_style_bg_color(segs[i], lv_color_hex(i == v ? 0x2A2A2A : 0x121212), LV_PART_MAIN);
             lv_obj_set_style_text_color(lbls[i], lv_color_hex(i == v ? 0xFFFFFF : 0x8C8C8C), LV_PART_MAIN);
           }
@@ -1551,7 +1553,7 @@ script:
   - id: fd_fill
     then:
       - lambda: |-
-          if (lv_obj_has_flag(id(fd_overlay), LV_OBJ_FLAG_HIDDEN)) return;
+          if (aqlv::is_hidden(id(fd_overlay))) return;
           bool t1 = id(tank) == 1;
           lv_obj_t *list = id(fd_list);
           lv_obj_clean(list);
@@ -1585,15 +1587,15 @@ script:
             lv_obj_set_style_bg_opa(row, LV_OPA_COVER, LV_PART_MAIN);
             lv_obj_set_style_bg_color(row, lv_color_hex(0x121212), LV_PART_MAIN);
             lv_obj_set_style_bg_color(row, lv_color_hex(0x1E1E1E), LV_STATE_PRESSED);
-            lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+            aqlv::clickable(row, true);
+            aqlv::scrollable(row, false);
             lv_obj_t *d = lv_obj_create(row);
             lv_obj_remove_style_all(d);
             lv_obj_set_size(d, 10, 10);
             lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, LV_PART_MAIN);
             lv_obj_set_style_bg_opa(d, LV_OPA_COVER, LV_PART_MAIN);
             lv_obj_set_style_bg_color(d, lv_color_hex(dot[st]), LV_PART_MAIN);
-            lv_obj_clear_flag(d, LV_OBJ_FLAG_CLICKABLE);
+            aqlv::clickable(d, false);
             lv_obj_align(d, LV_ALIGN_LEFT_MID, 16, 0);
             lv_obj_t *n = lv_label_create(row);
             lv_obj_set_style_text_font(n, f18, LV_PART_MAIN);
@@ -1703,8 +1705,8 @@ script:
             lv_obj_set_style_pad_hor(b, 14, LV_PART_MAIN);
             lv_obj_set_style_bg_opa(b, LV_OPA_COVER, LV_PART_MAIN);
             lv_obj_set_style_bg_color(b, lv_color_hex(on ? 0xD9A920 : 0x121212), LV_PART_MAIN);
-            lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+            aqlv::clickable(b, true);
+            aqlv::scrollable(b, false);
             lv_obj_t *l = lv_label_create(b);
             lv_obj_set_style_text_font(l, f14, LV_PART_MAIN);
             lv_obj_set_style_text_color(l, lv_color_hex(on ? 0x000000 : 0x8C8C8C), LV_PART_MAIN);
@@ -1722,8 +1724,8 @@ script:
             }, LV_EVENT_CLICKED, (void *) (intptr_t) i);
           }
           bool any = !id(uh_namen).empty();
-          if (any) { lv_obj_clear_flag(list, LV_OBJ_FLAG_HIDDEN); lv_obj_add_flag(id(ww_info), LV_OBJ_FLAG_HIDDEN); }
-          else { lv_obj_add_flag(list, LV_OBJ_FLAG_HIDDEN); lv_obj_clear_flag(id(ww_info), LV_OBJ_FLAG_HIDDEN); }
+          if (any) { aqlv::hidden(list, false); aqlv::hidden(id(ww_info), true); }
+          else { aqlv::hidden(list, true); aqlv::hidden(id(ww_info), false); }
 
   - id: show_overview
     then:

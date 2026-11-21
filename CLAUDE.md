@@ -39,6 +39,7 @@ Die Aquarium-Geräte hängen eng an Home Assistant. Das Wissen zur HA-Seite (Ent
   - `Water Change Recommended`: Anstieg über 25 %.
 
 ## Aquarium Tablet (`aqarium-tablet.yaml`, Gerät `aquarium-display`)
+- **LVGL-Flags in Lambdas** nur über `common/aquarium_lv.h` setzen (`aqlv::hidden`, `aqlv::is_hidden`, `aqlv::clickable`, `aqlv::scrollable`), nicht direkt mit `lv_obj_add_flag`/`lv_obj_clear_flag`/`lv_obj_has_flag`: Der Build-Server nutzt eine neuere LVGL, die diese als veraltet meldet, der lokale Testbau (LVGL 9.5) kennt die neuen Setter noch nicht.
 
 ### Zwei Becken
 - **Becken 0** = HA-Becken `aquarium` (Nano Cube Garnelen), **Becken 1** = `aquarium1` (Nano Cube Plants). Der Global `tank` (0/1) ist das aktive Becken.
